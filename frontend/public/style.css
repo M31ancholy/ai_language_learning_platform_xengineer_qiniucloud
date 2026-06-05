@@ -1,0 +1,169 @@
+/* 语塔攀登 - 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #0a0515;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+}
+
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* 像素风渲染 - 防止模糊 */
+canvas {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+/* DOM覆盖层样式 */
+.dom-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dom-overlay * {
+    pointer-events: auto;
+}
+
+/* 像素风按钮样式 */
+.pixel-btn {
+    font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+    font-size: 10px;
+    color: #fff;
+    background: #2a1a3e;
+    border: 2px solid #ff6b35;
+    padding: 8px 16px;
+    cursor: pointer;
+    image-rendering: pixelated;
+    transition: all 0.1s;
+    text-transform: uppercase;
+}
+
+.pixel-btn:hover {
+    background: #ff6b35;
+    color: #1a0a2e;
+    transform: scale(1.05);
+}
+
+.pixel-btn:active {
+    transform: scale(0.95);
+}
+
+/* 录音按钮 */
+.record-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #ff2d2d;
+    border: 3px solid #ff6b35;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    transition: all 0.2s;
+    animation: pulse-glow 2s infinite;
+}
+
+.record-btn.recording {
+    background: #ff0000;
+    animation: recording-pulse 0.5s infinite;
+}
+
+.record-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 45, 45, 0.6);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(255, 45, 45, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(255, 45, 45, 0.6); }
+}
+
+@keyframes recording-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* 波形显示 */
+.waveform-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 40px;
+}
+
+.waveform-bar {
+    width: 3px;
+    background: #51e5ff;
+    border-radius: 1px;
+    transition: height 0.05s;
+}
+
+/* 对话框样式 */
+.dialogue-box {
+    font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+    font-size: 10px;
+    color: #e0e0e0;
+    background: rgba(26, 10, 46, 0.95);
+    border: 2px solid #51e5ff;
+    padding: 12px;
+    line-height: 1.8;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* 评分显示 */
+.score-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.score-s { background: #ffd700; color: #1a0a2e; }
+.score-a { background: #51e5ff; color: #1a0a2e; }
+.score-b { background: #4caf50; color: #fff; }
+.score-c { background: #ff9800; color: #1a0a2e; }
+.score-d { background: #ff5722; color: #fff; }
+.score-f { background: #ff2d2d; color: #fff; }
+
+/* 滚动条像素风格 */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a0a2e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ff6b35;
+    border-radius: 0;
+}
