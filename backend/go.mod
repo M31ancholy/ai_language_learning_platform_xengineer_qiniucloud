@@ -1,0 +1,3 @@
+module ai_language_learning_platform_xengineer_qiniucloud
+
+go 1.26
