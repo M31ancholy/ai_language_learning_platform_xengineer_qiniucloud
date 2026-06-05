@@ -1,0 +1,18 @@
+{
+  "name": "word-spire",
+  "version": "0.1.0",
+  "description": "语塔攀登 - 英语口语Roguelike练习游戏",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["phaser", "game", "english", "pronunciation"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "phaser": "^4.1.0",
+    "vite": "^8.0.16"
+  }
+}
