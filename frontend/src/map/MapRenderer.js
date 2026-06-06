@@ -69,11 +69,11 @@ export class MapRenderer {
             const isAvailable = completedNodes.includes(fromNode.id) && !completedNodes.includes(toNode.id);
 
             if (isCompleted) {
-                g.lineStyle(2, 0x555555, 0.5);
+                g.lineStyle(6, 0x888888, 0.9); // 已完成路径：6px 粗，明亮灰色
             } else if (isAvailable) {
-                g.lineStyle(2, CONSTANTS.COLORS.ACCENT, 0.7);
+                g.lineStyle(10, 0x51e5ff, 1.0); // 当前可用路径：10px 极粗，亮冰蓝色，极高对比度
             } else {
-                g.lineStyle(1, 0x333333, 0.3);
+                g.lineStyle(5, 0x4e3d6f, 0.8); // 未解锁路径：5px 粗，深紫灰色，清晰可见但暗淡
             }
 
             g.lineBetween(fromPos.x, fromPos.y, toPos.x, toPos.y);
@@ -105,10 +105,14 @@ export class MapRenderer {
             isAvailable = !isCompleted;
         }
 
+        const isLocked = !isCompleted && !isAvailable;
+
         // 节点纹理选择
         let textureKey;
         if (isCompleted) {
             textureKey = 'node_completed';
+        } else if (isLocked) {
+            textureKey = 'node_locked';
         } else {
             textureKey = `node_${node.type}`;
         }
@@ -118,23 +122,30 @@ export class MapRenderer {
         sprite.setScale(1.2);
         this.container.add(sprite);
 
-        // 节点类型图标文字
-        const iconText = this._getNodeIcon(node.type);
-        const icon = this.scene.add.text(pos.x, pos.y - 1, iconText, {
-            fontFamily: '"Press Start 2P", monospace',
-            fontSize: '10px',
-            color: isCompleted ? '#555555' : '#ffffff',
-        }).setOrigin(0.5);
-        this.container.add(icon);
+        // 节点内容：非锁定节点才显示类型图标和难度
+        let icon = null;
+        let diffLabel = null;
 
-        // 难度标记
-        if (node.difficulty && !isCompleted && (node.type === 'monster' || node.type === 'elite')) {
-            const diffInfo = CONSTANTS.DIFFICULTY[node.difficulty.toUpperCase()];
-            if (diffInfo) {
-                const diffLabel = this.scene.add.text(pos.x, pos.y + 18, diffInfo.icon, {
-                    fontSize: '8px',
-                }).setOrigin(0.5);
-                this.container.add(diffLabel);
+        if (!isLocked) {
+            // 节点类型图标文字
+            const iconText = this._getNodeIcon(node.type);
+            icon = this.scene.add.text(pos.x, pos.y - 1, iconText, {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: '12px', // 稍大一点，契合 40x40 节点
+                color: isCompleted ? '#555555' : '#ffffff',
+            }).setOrigin(0.5);
+            icon.setScale(1.2);
+            this.container.add(icon);
+
+            // 难度标记
+            if (node.difficulty && !isCompleted && (node.type === 'monster' || node.type === 'elite')) {
+                const diffInfo = CONSTANTS.DIFFICULTY[node.difficulty.toUpperCase()];
+                if (diffInfo) {
+                    diffLabel = this.scene.add.text(pos.x, pos.y + 20, diffInfo.icon, {
+                        fontSize: '9px',
+                    }).setOrigin(0.5);
+                    this.container.add(diffLabel);
+                }
             }
         }
 
@@ -156,33 +167,141 @@ export class MapRenderer {
             });
         }
 
-        // 可选节点闪烁
+        // 可选节点闪耀的特效
         if (isAvailable && !isCompleted) {
+            // 1. 金色外发光圈双重涟漪特效
+            const ring1 = this.scene.add.graphics();
+            ring1.lineStyle(3, 0xffd700, 1);
+            ring1.strokeCircle(0, 0, 20); // 配合 40x40 节点的外圈半径
+            ring1.setPosition(pos.x, pos.y);
+            this.container.add(ring1);
+
             this.scene.tweens.add({
-                targets: sprite,
-                alpha: 0.6,
-                duration: 800,
-                yoyo: true,
+                targets: ring1,
+                scaleX: 1.7,
+                scaleY: 1.7,
+                alpha: 0,
+                duration: 1500,
                 repeat: -1,
+                ease: 'Sine.easeOut'
             });
 
-            // 可交互
+            const ring2 = this.scene.add.graphics();
+            ring2.lineStyle(3, 0xffd700, 1);
+            ring2.strokeCircle(0, 0, 20);
+            ring2.setPosition(pos.x, pos.y);
+            this.container.add(ring2);
+
+            this.scene.tweens.add({
+                targets: ring2,
+                scaleX: 1.7,
+                scaleY: 1.7,
+                alpha: 0,
+                duration: 1500,
+                delay: 750,
+                repeat: -1,
+                ease: 'Sine.easeOut'
+            });
+
+            // 2. 围绕节点旋转、放大的金色小星 (3颗)
+            const starSymbols = ['✦', '★', '✨'];
+            for (let i = 0; i < 3; i++) {
+                const angle = (i * Math.PI * 2) / 3;
+                const distance = 26;
+                const sx = pos.x + Math.cos(angle) * distance;
+                const sy = pos.y + Math.sin(angle) * distance;
+                const symbol = starSymbols[i % starSymbols.length];
+
+                const star = this.scene.add.text(sx, sy, symbol, {
+                    fontFamily: '"Press Start 2P", monospace',
+                    fontSize: '8px',
+                    color: '#ffd700',
+                }).setOrigin(0.5);
+                this.container.add(star);
+
+                this.scene.tweens.add({
+                    targets: star,
+                    scaleX: 1.5,
+                    scaleY: 1.5,
+                    alpha: 0.3,
+                    angle: 180,
+                    duration: 1000 + i * 200,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+
+            // 3. 呼吸与悬停缩放动画同步管理
+            const targetsToScale = [sprite];
+            if (icon) targetsToScale.push(icon);
+            if (diffLabel) targetsToScale.push(diffLabel);
+
+            let hoverTween = null;
+            const startBreathe = () => {
+                return this.scene.tweens.add({
+                    targets: targetsToScale,
+                    scaleX: 1.35,
+                    scaleY: 1.35,
+                    duration: 900,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Quad.easeInOut'
+                });
+            };
+
+            let breatheTween = startBreathe();
+
+            const onOver = () => {
+                if (breatheTween) {
+                    breatheTween.stop();
+                    breatheTween = null;
+                }
+                if (hoverTween) hoverTween.stop();
+
+                hoverTween = this.scene.tweens.add({
+                    targets: targetsToScale,
+                    scaleX: 1.5,
+                    scaleY: 1.5,
+                    duration: 150,
+                    ease: 'Quad.easeOut'
+                });
+            };
+
+            const onOut = () => {
+                if (hoverTween) {
+                    hoverTween.stop();
+                    hoverTween = null;
+                }
+
+                hoverTween = this.scene.tweens.add({
+                    targets: targetsToScale,
+                    scaleX: 1.2,
+                    scaleY: 1.2,
+                    duration: 150,
+                    ease: 'Quad.easeIn',
+                    onComplete: () => {
+                        breatheTween = startBreathe();
+                    }
+                });
+            };
+
+            // 可交互设置
             sprite.setInteractive({ useHandCursor: true });
-            sprite.on('pointerover', () => {
-                sprite.setScale(1.5);
-            });
-            sprite.on('pointerout', () => {
-                sprite.setScale(1.2);
-            });
+            sprite.on('pointerover', onOver);
+            sprite.on('pointerout', onOut);
             sprite.on('pointerup', () => {
                 if (onNodeClick) onNodeClick(node);
             });
 
-            // 图标也可交互
-            icon.setInteractive({ useHandCursor: true });
-            icon.on('pointerup', () => {
-                if (onNodeClick) onNodeClick(node);
-            });
+            if (icon) {
+                icon.setInteractive({ useHandCursor: true });
+                icon.on('pointerover', onOver);
+                icon.on('pointerout', onOut);
+                icon.on('pointerup', () => {
+                    if (onNodeClick) onNodeClick(node);
+                });
+            }
         }
 
         this.nodeSprites[node.id] = sprite;

@@ -137,34 +137,60 @@ export class PreloadScene extends Phaser.Scene {
 
             // 节点底座（圆形）
             g.fillStyle(0x2a1a3e);
-            g.fillCircle(16, 16, 14);
-            g.lineStyle(2, data.color, 1);
-            g.strokeCircle(16, 16, 14);
+            g.fillCircle(20, 20, 17);
+            g.lineStyle(3, data.color, 1);
+            g.strokeCircle(20, 20, 17);
 
             // 内部填充
-            g.fillStyle(data.color, 0.3);
-            g.fillCircle(16, 16, 10);
+            g.fillStyle(data.color, 0.4);
+            g.fillCircle(20, 20, 12);
 
-            g.generateTexture(`node_${type}`, 32, 32);
+            g.generateTexture(`node_${type}`, 40, 40);
             g.destroy();
         }
 
         // 已完成节点
         const gDone = this.add.graphics();
         gDone.fillStyle(0x333333);
-        gDone.fillCircle(16, 16, 14);
-        gDone.lineStyle(2, 0x555555, 1);
-        gDone.strokeCircle(16, 16, 14);
-        gDone.generateTexture('node_completed', 32, 32);
+        gDone.fillCircle(20, 20, 17);
+        gDone.lineStyle(3, 0x888888, 1);
+        gDone.strokeCircle(20, 20, 17);
+        gDone.generateTexture('node_completed', 40, 40);
         gDone.destroy();
+
+        // 未解锁的锁节点（灰色，不透露关卡类型，直接显示一个灰色的像素锁）
+        const gLocked = this.add.graphics();
+        gLocked.fillStyle(0x1a0a2e);
+        gLocked.fillCircle(20, 20, 17);
+        gLocked.lineStyle(3, 0x555555, 1);
+        gLocked.strokeCircle(20, 20, 17);
+        gLocked.fillStyle(0x333333, 0.5);
+        gLocked.fillCircle(20, 20, 12);
+
+        // 绘制一个灰色的像素锁 (在 40x40 的中心)
+        // 锁身 (14, 18) to (25, 27)
+        gLocked.fillStyle(0x777777);
+        gLocked.fillRect(14, 18, 12, 10);
+
+        // 锁梁 (16, 13) to (24, 18)
+        gLocked.fillRect(16, 14, 2, 4); // 左侧柱子
+        gLocked.fillRect(22, 14, 2, 4); // 右侧柱子
+        gLocked.fillRect(17, 13, 6, 2); // 顶部横条
+
+        // 锁孔 (19, 21) to (21, 24)
+        gLocked.fillStyle(0x1a0a2e);
+        gLocked.fillRect(19, 21, 2, 4);
+
+        gLocked.generateTexture('node_locked', 40, 40);
+        gLocked.destroy();
 
         // 当前节点高亮
         const gCurrent = this.add.graphics();
         gCurrent.fillStyle(0x51e5ff, 0.3);
-        gCurrent.fillCircle(16, 16, 18);
-        gCurrent.lineStyle(3, 0x51e5ff, 1);
-        gCurrent.strokeCircle(16, 16, 16);
-        gCurrent.generateTexture('node_current', 36, 36);
+        gCurrent.fillCircle(24, 24, 22);
+        gCurrent.lineStyle(4, 0x51e5ff, 1);
+        gCurrent.strokeCircle(24, 24, 20);
+        gCurrent.generateTexture('node_current', 48, 48);
         gCurrent.destroy();
     }
 
