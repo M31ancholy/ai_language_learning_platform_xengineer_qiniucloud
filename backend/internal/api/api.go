@@ -26,12 +26,12 @@ func RegisterRoutes(r *gin.Engine, cfg config.Config) {
 	r.POST("/api/evaluate/grammar-expression", handler.AnalyzeGrammarHandler(cfg))
 	r.POST("/api/evaluate/score", handler.CalculateScoreHandler())
 
+	// 豆包语音合成API
+	r.POST("/api/audio/grammar", handler.AudioGenerateHandler(cfg))
+
 	// 总结 AI 报告 API
 	r.POST("/api/summary/generate", handler.GenerateSummaryHandler(cfg))
 
 	// 实时语音对话 WebSocket 接口
 	r.GET("/api/realtime/chat", handler.RealtimeChatHandler(cfg))
 }
-
-
-
