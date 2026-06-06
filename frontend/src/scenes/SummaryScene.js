@@ -243,15 +243,24 @@ export class SummaryScene extends Phaser.Scene {
         } else {
             this.maxScrollY = 0;
         }
-    }
 
-    // ========== 绘制 AI 导师点评面板 ==========
+        // 为 contentContainer 设置几何遮罩以限制滚动区域，防止文字滚出顶部和底部边界
+        const maskShape = this.make.graphics();
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(0, 270, width, height - 270 - 70); // 仅在 y=270 到继续按钮区域（h-70）之间显示
+        const mask = maskShape.createGeometryMask();
+        this.contentContainer.setMask(mask);
+    }
 
     _drawAICoachFeedback(sceneW, startY, feedback, focusErrors) {
         const cx = sceneW / 2;
         const cardW = sceneW - 100;
         
-        // 1. 创建标题
+        // 1. 创建背景图形，先加入容器，使其处于底层且随内容滚动
+        const g = this.add.graphics();
+        this.contentContainer.add(g);
+        
+        // 2. 创建标题
         const titleY = startY + 16;
         const titleText = createPixelText(this, cx, titleY, '🤖 AI 导师点评', 'subtitle', {
             fontSize: '10px',
@@ -260,7 +269,7 @@ export class SummaryScene extends Phaser.Scene {
         titleText.setOrigin(0.5);
         this.contentContainer.add(titleText);
         
-        // 2. 创建点评文本
+        // 3. 创建点评文本
         const feedbackY = titleY + 18;
         const feedbackText = createPixelText(this, cx, feedbackY, feedback, 'body', {
             fontSize: '8px',
@@ -272,9 +281,8 @@ export class SummaryScene extends Phaser.Scene {
         feedbackText.setOrigin(0.5, 0); // 顶部对齐以方便后续定位
         this.contentContainer.add(feedbackText);
         
-        // 3. 创建重点建议列表
+        // 4. 创建重点建议列表 (动态高度计算)
         let focusY = feedbackY + feedbackText.height + 14;
-        const suggestionsAdded = [];
         
         if (focusErrors && focusErrors.length > 0) {
             const focusTitle = createPixelText(this, cx, focusY, '🎯 重点攻克建议:', 'small', {
@@ -283,33 +291,30 @@ export class SummaryScene extends Phaser.Scene {
             });
             focusTitle.setOrigin(0.5, 0);
             this.contentContainer.add(focusTitle);
-            suggestionsAdded.push(focusTitle);
             
-            focusErrors.forEach((err, idx) => {
-                const errY = focusY + 14 + idx * 14;
-                const errText = createPixelText(this, cx, errY, `• ${err}`, 'small', {
+            let currentErrY = focusY + 16;
+            focusErrors.forEach((err) => {
+                const errText = createPixelText(this, cx, currentErrY, `• ${err}`, 'small', {
                     fontSize: '7px',
                     color: '#ff9800',
                     wordWrap: { width: cardW - 30 }
                 });
                 errText.setOrigin(0.5, 0);
                 this.contentContainer.add(errText);
-                suggestionsAdded.push(errText);
+                currentErrY += errText.height + 6; // 动态加上文本实际高度与间距
             });
             
-            focusY += 14 + focusErrors.length * 14;
+            focusY = currentErrY;
         }
         
-        const cardH = focusY - startY + 8;
+        const cardH = focusY - startY + 12; // 增加底边空余
         
-        // 4. 创建面板底座与边框图形
-        const g = this.add.graphics();
+        // 5. 绘制面板背景与边框
         g.fillStyle(0x24153a, 0.9); // 极暗紫底色
         g.lineStyle(2, 0xff6b35, 1); // 地狱橙色细边框
         g.fillRoundedRect(cx - cardW / 2, startY, cardW, cardH, 6);
         g.strokeRoundedRect(cx - cardW / 2, startY, cardW, cardH, 6);
         
-        this.contentContainer.add(g);
         this.contentContainer.sendToBack(g); // 保证底座被置于文字最底层
         
         return startY + cardH + 20; // 返回下一模块的 startY
@@ -477,7 +482,7 @@ export class SummaryScene extends Phaser.Scene {
 
     _createContinueButton(w, h) {
         const btnW = 200;
-        const btnH = 40;
+        const btnH = 48;
         const cx = w / 2;
         const cy = h - 40;
 

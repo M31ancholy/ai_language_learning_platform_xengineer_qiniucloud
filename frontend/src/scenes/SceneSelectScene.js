@@ -160,7 +160,7 @@ export class SceneSelectScene extends Phaser.Scene {
 
     _createBackButton(x, y) {
         const btnWidth = 160;
-        const btnHeight = 36;
+        const btnHeight = 44;
         const container = this.add.container(x, y);
 
         const bg = this.add.rectangle(0, 0, btnWidth, btnHeight, CONSTANTS.COLORS.BG_PANEL);

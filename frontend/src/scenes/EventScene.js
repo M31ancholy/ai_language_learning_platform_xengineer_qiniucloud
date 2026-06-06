@@ -71,7 +71,7 @@ export class EventScene extends Phaser.Scene {
     _createChoices(sceneW, sceneH) {
         const choices = this.eventData.choices;
         const btnW = Math.min(sceneW - 80, 600);
-        const btnH = 48;
+        const btnH = 54;
         const gap = 12;
         const startY = 290;
 
@@ -229,7 +229,7 @@ export class EventScene extends Phaser.Scene {
 
     _createContinueButton(w, h) {
         const btnW = 200;
-        const btnH = 40;
+        const btnH = 48;
         const cx = w / 2;
         const cy = h - 50;
 

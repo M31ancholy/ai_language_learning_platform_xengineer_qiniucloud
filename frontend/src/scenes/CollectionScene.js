@@ -328,7 +328,7 @@ export class CollectionScene extends Phaser.Scene {
 
     _createBackButton(w, h) {
         const btnW = 180;
-        const btnH = 40;
+        const btnH = 48;
         const cx = w / 2;
         const cy = h - 40;
 

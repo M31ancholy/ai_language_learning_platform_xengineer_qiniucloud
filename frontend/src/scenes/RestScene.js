@@ -299,7 +299,7 @@ export class RestScene extends Phaser.Scene {
     _createContinueButton() {
         const { width, height } = this.scale;
         const btnW = 200;
-        const btnH = 40;
+        const btnH = 48;
         const btnX = width / 2;
         const btnY = height - 50;
 

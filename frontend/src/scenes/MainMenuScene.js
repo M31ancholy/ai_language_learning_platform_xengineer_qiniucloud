@@ -78,8 +78,8 @@ export class MainMenuScene extends Phaser.Scene {
 
         // ========== 菜单按钮 ==========
         const hasSave = !!localStorage.getItem('wordspire_save');
-        const startY = hasSave ? 290 : 320;
-        const gap = 55;
+        const startY = hasSave ? 280 : 310;
+        const gap = 62;
 
         let btnIndex = 0;
 
@@ -103,7 +103,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     _createMenuButton(x, y, text, onClick, color = CONSTANTS.COLORS.PRIMARY) {
         const btnWidth = 240;
-        const btnHeight = 40;
+        const btnHeight = 48;
 
         // 按钮容器
         const container = this.add.container(x, y);

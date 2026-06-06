@@ -149,34 +149,50 @@ export class BossScene extends Phaser.Scene {
     _createDialogueArea(width) {
         const cx = width / 2;
 
-        // 历史对话容器（简易滚动列表）
-        this.historyText = this.add.text(cx + 100, 120, '', {
+        // 历史对话容器（简易滚动列表）放置在上方并左对齐，以防与气泡重合
+        this.historyText = this.add.text(cx - 140, 70, '', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '7px',
             color: '#888888',
             lineSpacing: 6,
-            wordWrap: { width: 420 }
+            wordWrap: { width: 520 }
         }).setOrigin(0, 0);
 
-        // 当前 Boss 台词气泡
-        const bubbleBg = this.add.rectangle(cx + 80, 240, 480, 100, CONSTANTS.COLORS.BG_PANEL, 0.95);
-        bubbleBg.setStrokeStyle(2, CONSTANTS.COLORS.GOLD);
+        // 当前 Boss 台词气泡背景
+        this.bubbleBg = this.add.rectangle(cx + 120, 240, 560, 100, CONSTANTS.COLORS.BG_PANEL, 0.95);
+        this.bubbleBg.setStrokeStyle(2, CONSTANTS.COLORS.GOLD);
 
-        this.bossLineText = this.add.text(cx - 140, 205, '', {
+        this.bossLineText = this.add.text(cx - 140, 215, '', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#ffd700',
             lineSpacing: 8,
-            wordWrap: { width: 440 }
+            wordWrap: { width: 520 }
         });
 
-        this.promptText = this.add.text(cx - 140, 265, '', {
+        this.promptText = this.add.text(cx - 140, 275, '', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '8px',
             color: '#51e5ff',
             lineSpacing: 6,
-            wordWrap: { width: 440 }
+            wordWrap: { width: 520 }
         });
+    }
+
+    _alignDialogueBubble() {
+        if (!this.bossLineText || !this.promptText || !this.bubbleBg) return;
+        
+        const bubbleTop = 190;
+        const padding = 15;
+        
+        this.bossLineText.y = bubbleTop + padding;
+        this.promptText.y = this.bossLineText.y + this.bossLineText.displayHeight + padding;
+        
+        const totalHeight = (this.promptText.y + this.promptText.displayHeight + padding) - bubbleTop;
+        
+        // 动态调整背景大小和中心 Y 位置
+        this.bubbleBg.setSize(560, totalHeight);
+        this.bubbleBg.y = bubbleTop + totalHeight / 2;
     }
 
     _createRecordingArea(width, height) {
@@ -338,6 +354,9 @@ export class BossScene extends Phaser.Scene {
             // 播放剧本化关卡台词
             this._playBossVoice(roundData.bossLine);
         }
+
+        // 重新排版并动态调整气泡背景大小
+        this._alignDialogueBubble();
 
         // 重置录音倒计时
         this.timeRemaining = 60;
@@ -591,6 +610,7 @@ export class BossScene extends Phaser.Scene {
                     case 'assistant_final':
                         this.currentBossLine = data.text || this.currentBossLine;
                         this.bossLineText.setText(`Boss: "${this.currentBossLine}"`);
+                        this._alignDialogueBubble();
                         break;
                     case 'history_snapshot':
                         this.chatHistory = data.messages || [];
@@ -779,6 +799,7 @@ export class BossScene extends Phaser.Scene {
                 this.recognizedTextContent = userText;
                 this.currentBossLine = assistantText;
                 this.bossLineText.setText(`Boss: "${assistantText}"`);
+                this._alignDialogueBubble();
 
                 score = 85;
                 finalPronunciation = 85;

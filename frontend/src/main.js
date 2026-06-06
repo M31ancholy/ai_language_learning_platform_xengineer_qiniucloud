@@ -14,6 +14,21 @@ Phaser.GameObjects.GameObjectFactory.prototype.text = function (x, y, text, styl
         // 浅拷贝 style 以防修改原引用对象
         finalStyle = { ...style };
         
+        // 自动添加 padding 避免字体在 Canvas 渲染时最下方或顶部被裁剪
+        if (!finalStyle.padding) {
+            finalStyle.padding = { top: 6, bottom: 6, left: 6, right: 6 };
+        } else if (typeof finalStyle.padding === 'number') {
+            const pad = finalStyle.padding;
+            finalStyle.padding = { top: pad + 6, bottom: pad + 6, left: pad + 6, right: pad + 6 };
+        } else {
+            finalStyle.padding = {
+                top: (finalStyle.padding.top || 0) + 6,
+                bottom: (finalStyle.padding.bottom || 0) + 6,
+                left: (finalStyle.padding.left || 0) + 6,
+                right: (finalStyle.padding.right || 0) + 6
+            };
+        }
+        
         // 缩放字号（放大 1.5 倍）
         if (finalStyle.fontSize !== undefined && finalStyle.fontSize !== null) {
             if (typeof finalStyle.fontSize === 'number') {
@@ -41,8 +56,11 @@ Phaser.GameObjects.GameObjectFactory.prototype.text = function (x, y, text, styl
             finalStyle.lineSpacing = finalStyle.lineSpacing * 1.5;
         }
     } else {
-        // 如果没有传入 style，使用带缩放的默认字号
-        finalStyle = { fontSize: '24px' };
+        // 如果没有传入 style，使用带缩放的默认字号和 padding
+        finalStyle = {
+            fontSize: '24px',
+            padding: { top: 6, bottom: 6, left: 6, right: 6 }
+        };
     }
 
     const textObj = originalTextCreator.call(this, x, y, text, finalStyle);

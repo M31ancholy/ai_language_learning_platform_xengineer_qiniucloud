@@ -301,7 +301,7 @@ export class ShopScene extends Phaser.Scene {
 
     _createLeaveButton(w, h) {
         const btnW = 200;
-        const btnH = 36;
+        const btnH = 44;
         const btnX = w - btnW / 2 - 30;
         const btnY = h - 46;
 

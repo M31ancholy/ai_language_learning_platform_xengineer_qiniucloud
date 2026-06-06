@@ -194,7 +194,7 @@ export class RewardScene extends Phaser.Scene {
 
     _createSkipButton(w, h) {
         const btnW = 260;
-        const btnH = 36;
+        const btnH = 44;
         const cx = w / 2;
         const cy = h - 40;
 
