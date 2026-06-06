@@ -17,6 +17,11 @@ type Config struct {
 	TencentSOERegion    string
 	DoubaoApiKey        string
 	DoubaoTTSResourceID string
+
+	DoubaoAppId string
+	DoubaoAK    string
+	DoubaoSK    string
+
 	DoubaoTTSURL        string
 	DoubaoTTSSpeaker    string
 	DoubaoTTSFormat     string
@@ -74,5 +79,8 @@ func Load() Config {
 		DoubaoTTSFormat:     v.GetString("doubao.tts_format"),
 		DoubaoTTSSampleRate: v.GetInt("doubao.tts_sample_rate"),
 		DoubaoApiKey:        v.GetString("doubao.api_key"),
+		DoubaoAppId:         v.GetString("doubao.app_id"),
+		DoubaoAK:            v.GetString("doubao.ak"),
+		DoubaoSK:            v.GetString("doubao.sk"),
 	}
 }
