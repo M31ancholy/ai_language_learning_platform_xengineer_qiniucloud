@@ -322,6 +322,8 @@ export class BossScene extends Phaser.Scene {
             if (this.currentRound === 1) {
                 this.currentBossLine = "Welcome, challenger. You have reached the summit of the Word Spire. Prove your English fluency to me!";
                 this.chatHistory = [];
+                // 播放首个欢迎语音
+                this._playBossVoice(this.currentBossLine);
             }
             this.bossLineText.setText(`Boss: "${this.currentBossLine}"`);
             this.promptText.setText(`任务: 与首领进行自由英语交流对话\n提示: 根据首领的发言进行自然作答，词数不限。`);
@@ -332,12 +334,60 @@ export class BossScene extends Phaser.Scene {
             this.bossLineText.setText(`Boss: "${roundData.bossLine}"`);
             const hintsStr = Array.isArray(roundData.hints) ? roundData.hints.join(', ') : (roundData.hints || '无');
             this.promptText.setText(`任务: ${roundData.prompt}\n提示: ${hintsStr}`);
+            
+            // 播放剧本化关卡台词
+            this._playBossVoice(roundData.bossLine);
         }
 
         // 重置录音倒计时
         this.timeRemaining = 60;
         this.timerText.setText(`⏱️ ${formatTime(this.timeRemaining)}`).setColor('#51e5ff');
         this.recognizedText.setText('');
+    }
+
+    async _playBossVoice(text) {
+        if (!text) return;
+        
+        // 停止上一个还在播放的台词语音
+        if (this.bossVoiceSource) {
+            try {
+                this.bossVoiceSource.stop();
+            } catch (e) {
+                // 已播放完或未播放直接忽略
+            }
+            this.bossVoiceSource = null;
+        }
+
+        try {
+            const response = await fetch('/api/audio/grammar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text,
+                    format: 'mp3'
+                })
+            });
+            if (!response.ok) {
+                console.warn('[BossScene] TTS request failed:', response.status);
+                return;
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            this._ensureRealtimeOutputContext();
+            
+            this.realtimeOutputContext.decodeAudioData(arrayBuffer, (audioBuffer) => {
+                const source = this.realtimeOutputContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(this.realtimeOutputContext.destination);
+                source.start(0);
+                this.bossVoiceSource = source;
+            }, (err) => {
+                console.error('[BossScene] Failed to decode audio data:', err);
+            });
+        } catch (err) {
+            console.error('[BossScene] Play boss voice error:', err);
+        }
     }
 
     async _startRecording(btn, label) {
