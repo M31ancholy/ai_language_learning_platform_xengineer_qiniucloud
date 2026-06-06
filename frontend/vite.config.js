@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://localhost:8081';
+
 export default defineConfig({
     base: './',
     build: {
@@ -14,11 +16,15 @@ export default defineConfig({
         open: true,
         proxy: {
             '/api': {
-                target: 'http://localhost:8081',
+                target: backendTarget,
                 changeOrigin: true,
                 ws: true // Enable WebSocket proxy support
+            },
+            '/ws': {
+                target: backendTarget,
+                ws: true,
+                changeOrigin: true
             }
         }
     }
 });
-

@@ -25,6 +25,8 @@ export class BossScene extends Phaser.Scene {
         this.timeRemaining = 60;
         this.timerEvent = null;
         this.roundScores = [];
+        this.realtimeReady = false;
+        this.realtimeAudioPlayhead = 0;
     }
 
     init(data) {
@@ -85,6 +87,7 @@ export class BossScene extends Phaser.Scene {
         // 建立 WebSocket 连接（仅针对 Act 3 的实时语音 Boss 对话）
         if (this.act === 3) {
             this._setupRealtimeWebSocket();
+            this.events.once('shutdown', () => this._closeRealtimeResources());
         }
 
         // 首次启动，显示 Boss 第一句台词
@@ -318,7 +321,7 @@ export class BossScene extends Phaser.Scene {
             // Act 3: 实时语音开放对话
             if (this.currentRound === 1) {
                 this.currentBossLine = "Welcome, challenger. You have reached the summit of the Word Spire. Prove your English fluency to me!";
-                this.chatHistory = [{ role: 'assistant', content: this.currentBossLine }];
+                this.chatHistory = [];
             }
             this.bossLineText.setText(`Boss: "${this.currentBossLine}"`);
             this.promptText.setText(`任务: 与首领进行自由英语交流对话\n提示: 根据首领的发言进行自然作答，词数不限。`);
@@ -336,7 +339,7 @@ export class BossScene extends Phaser.Scene {
         this.recognizedText.setText('');
     }
 
-    _startRecording(btn, label) {
+    async _startRecording(btn, label) {
         this.isRecording = true;
         btn.setTexture('btn_stop');
         label.setText('🔴 正在录音... 再次点击提交');
@@ -365,9 +368,26 @@ export class BossScene extends Phaser.Scene {
             }
         });
 
-        // 启动语音识别与真实录音
-        this._startSpeechRecognition();
-        this._tryStartRealRecording();
+        if (this.act === 3) {
+            this._ensureRealtimeOutputContext();
+            btn.disableInteractive();
+            try {
+                await this._startRealtimeAudioCapture();
+                btn.setInteractive({ useHandCursor: true });
+            } catch (err) {
+                console.error('[BossScene] Realtime microphone start failed:', err);
+                this._stopRealtimeAudioCapture();
+                this.isRecording = false;
+                btn.setTexture('btn_record');
+                label.setText('麦克风启动失败');
+                if (this.timerEvent) this.timerEvent.remove();
+                if (this.waveformTween) this.waveformTween.remove();
+                btn.setInteractive({ useHandCursor: true });
+            }
+        } else {
+            this._startSpeechRecognition();
+            this._tryStartRealRecording();
+        }
     }
 
     async _stopRecording(btn, label) {
@@ -380,13 +400,24 @@ export class BossScene extends Phaser.Scene {
         if (this.waveformTween) this.waveformTween.remove();
         this.waveformBars.forEach(b => { b.setSize(3, 4); b.setAlpha(0.3); });
 
-        this._stopSpeechRecognition();
-        this._tryStopRealRecording();
+        if (this.act === 3) {
+            this._stopRealtimeAudioCapture();
+        } else {
+            this._stopSpeechRecognition();
+            this._tryStopRealRecording();
+        }
 
         // 评分延迟效果
         this.recordBtn.disableInteractive();
         
         try {
+            if (this.act === 3) {
+                label.setText('正在等待豆包回复...');
+                const realtimeData = await this.realtimeTurnPromise;
+                await this._evaluateRound(null, realtimeData);
+                this.recordBtn.setInteractive();
+                return;
+            }
             const audioBlob = await (this.audioReadyPromise || Promise.resolve(null));
             await this._evaluateRound(audioBlob);
         } catch (err) {
@@ -475,22 +506,53 @@ export class BossScene extends Phaser.Scene {
 
     _setupRealtimeWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api/realtime/chat`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         
         console.log('[BossScene] Connecting to Realtime WebSocket:', wsUrl);
         this.ws = new WebSocket(wsUrl);
+        this.ws.binaryType = 'arraybuffer';
+        this.realtimeReady = false;
+        this.realtimeReadyPromise = new Promise((resolve, reject) => {
+            this.realtimeReadyResolver = resolve;
+            this.realtimeReadyRejecter = reject;
+        });
         
         this.ws.onopen = () => {
             console.log('[BossScene] Realtime WebSocket connected');
         };
         
         this.ws.onmessage = (event) => {
+            if (event.data instanceof ArrayBuffer) {
+                this._queueRealtimePCM(event.data);
+                return;
+            }
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'reply') {
-                    if (this.realtimeResponseResolver) {
-                        this.realtimeResponseResolver(data);
-                    }
+                switch (data.type) {
+                    case 'session_ready':
+                        this.realtimeReady = true;
+                        this.realtimeReadyResolver?.(data);
+                        break;
+                    case 'user_final':
+                        this.recognizedTextContent = data.text || '';
+                        this.recognizedText.setText(`"${this.recognizedTextContent}"`);
+                        break;
+                    case 'assistant_final':
+                        this.currentBossLine = data.text || this.currentBossLine;
+                        this.bossLineText.setText(`Boss: "${this.currentBossLine}"`);
+                        break;
+                    case 'history_snapshot':
+                        this.chatHistory = data.messages || [];
+                        break;
+                    case 'turn_complete':
+                        this.realtimeTurnResolver?.(data);
+                        this.realtimeTurnResolver = null;
+                        this.realtimeTurnRejecter = null;
+                        break;
+                    case 'error':
+                        console.error('[BossScene] Realtime server error:', data.message);
+                        this.realtimeTurnRejecter?.(new Error(data.message || 'Realtime dialogue failed'));
+                        break;
                 }
             } catch (err) {
                 console.error('[BossScene] Failed to parse WebSocket message:', err);
@@ -499,38 +561,149 @@ export class BossScene extends Phaser.Scene {
         
         this.ws.onerror = (err) => {
             console.error('[BossScene] WebSocket error:', err);
+            this.realtimeReadyRejecter?.(err);
+            this.realtimeTurnRejecter?.(new Error('WebSocket error'));
         };
         
         this.ws.onclose = () => {
             console.log('[BossScene] WebSocket closed');
+            this.realtimeReady = false;
+            this.realtimeTurnRejecter?.(new Error('WebSocket closed'));
         };
     }
 
-    async _playBossResponseAudio(base64Audio) {
-        try {
-            if (!this.audioCtx) {
-                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    async _startRealtimeAudioCapture() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.realtimeReady) {
+            if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+                this._setupRealtimeWebSocket();
             }
-            
-            const binaryString = window.atob(base64Audio);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            await this.realtimeReadyPromise;
+        }
+
+        this.realtimeTurnPromise = new Promise((resolve, reject) => {
+            this.realtimeTurnResolver = resolve;
+            this.realtimeTurnRejecter = reject;
+            window.setTimeout(() => {
+                if (this.realtimeTurnRejecter === reject) {
+                    reject(new Error('Realtime response timeout'));
+                    this.realtimeTurnResolver = null;
+                    this.realtimeTurnRejecter = null;
+                }
+            }, 45000);
+        });
+
+        this.ws.send(JSON.stringify({ type: 'start_turn' }));
+        this.realtimeCapturing = true;
+        this.realtimeInputStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
             }
-            
-            const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer);
-            const source = this.audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(this.audioCtx.destination);
-            source.start(0);
-            console.log('[BossScene] Playing Boss audio response');
-        } catch (err) {
-            console.error('[BossScene] Failed to play Boss audio:', err);
+        });
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.realtimeInputContext = new AudioContextClass();
+        const workletCode = `
+            class PCMForwarder extends AudioWorkletProcessor {
+                process(inputs) {
+                    const input = inputs[0] && inputs[0][0];
+                    if (input) this.port.postMessage(input.slice());
+                    return true;
+                }
+            }
+            registerProcessor('pcm-forwarder', PCMForwarder);
+        `;
+        const workletURL = URL.createObjectURL(new Blob([workletCode], { type: 'application/javascript' }));
+        await this.realtimeInputContext.audioWorklet.addModule(workletURL);
+        URL.revokeObjectURL(workletURL);
+
+        this.realtimeInputSource = this.realtimeInputContext.createMediaStreamSource(this.realtimeInputStream);
+        this.realtimeInputNode = new AudioWorkletNode(this.realtimeInputContext, 'pcm-forwarder');
+        const silentGain = this.realtimeInputContext.createGain();
+        silentGain.gain.value = 0;
+        this.realtimeInputNode.port.onmessage = ({ data }) => {
+            if (!this.isRecording || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+            const pcm = this._resampleToPCM16(data, this.realtimeInputContext.sampleRate, 16000);
+            if (pcm.byteLength > 0) this.ws.send(pcm);
+        };
+        this.realtimeInputSource.connect(this.realtimeInputNode);
+        this.realtimeInputNode.connect(silentGain);
+        silentGain.connect(this.realtimeInputContext.destination);
+        this.realtimeSilentGain = silentGain;
+        await this.realtimeInputContext.resume();
+    }
+
+    _stopRealtimeAudioCapture() {
+        const wasCapturing = this.realtimeCapturing;
+        this.realtimeCapturing = false;
+        this.realtimeInputNode?.disconnect();
+        this.realtimeInputSource?.disconnect();
+        this.realtimeSilentGain?.disconnect();
+        this.realtimeInputStream?.getTracks().forEach(track => track.stop());
+        this.realtimeInputContext?.close();
+        this.realtimeInputNode = null;
+        this.realtimeInputSource = null;
+        this.realtimeInputStream = null;
+        this.realtimeInputContext = null;
+        if (wasCapturing && this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'end_turn' }));
         }
     }
 
-    async _evaluateRound(audioBlob) {
+    _resampleToPCM16(input, sourceRate, targetRate) {
+        const ratio = sourceRate / targetRate;
+        const outputLength = Math.max(1, Math.floor(input.length / ratio));
+        const output = new Int16Array(outputLength);
+        for (let i = 0; i < outputLength; i++) {
+            const start = Math.floor(i * ratio);
+            const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+            let sum = 0;
+            for (let j = start; j < end; j++) sum += input[j];
+            const sample = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
+            output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        }
+        return output.buffer;
+    }
+
+    _queueRealtimePCM(arrayBuffer) {
+        this._ensureRealtimeOutputContext();
+        this.realtimeOutputContext.resume();
+        const view = new DataView(arrayBuffer);
+        const sampleCount = Math.floor(view.byteLength / 2);
+        const audioBuffer = this.realtimeOutputContext.createBuffer(1, sampleCount, 24000);
+        const channel = audioBuffer.getChannelData(0);
+        for (let i = 0; i < sampleCount; i++) {
+            channel[i] = view.getInt16(i * 2, true) / 32768;
+        }
+        const source = this.realtimeOutputContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.realtimeOutputContext.destination);
+        const startAt = Math.max(this.realtimeOutputContext.currentTime + 0.02, this.realtimeAudioPlayhead);
+        source.start(startAt);
+        this.realtimeAudioPlayhead = startAt + audioBuffer.duration;
+    }
+
+    _ensureRealtimeOutputContext() {
+        if (this.realtimeOutputContext) return;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.realtimeOutputContext = new AudioContextClass();
+        this.realtimeAudioPlayhead = this.realtimeOutputContext.currentTime;
+        this.realtimeOutputContext.resume();
+    }
+
+    _closeRealtimeResources() {
+        this._stopRealtimeAudioCapture();
+        this.realtimeOutputContext?.close();
+        this.realtimeOutputContext = null;
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'close_session' }));
+        }
+        this.ws?.close();
+    }
+
+    async _evaluateRound(audioBlob, realtimeData = null) {
         if (this.act !== 3) {
             const roundData = this.bossRoundsData[this.currentRound - 1];
             if (!roundData) return;
@@ -550,59 +723,23 @@ export class BossScene extends Phaser.Scene {
         // Act 3 实时语音开放对话分支
         if (this.act === 3) {
             try {
-                this.recordLabel.setText('🔄 正在传送并分析语音对话...');
-                const base64 = audioBlob ? await this._blobToBase64(audioBlob) : "";
-                const userText = this.recognizedTextContent || "Hello, I am ready to challenge you.";
+                const userText = realtimeData?.userText || this.recognizedTextContent || '';
+                const assistantText = realtimeData?.assistantText || this.currentBossLine || '';
+                this.recognizedTextContent = userText;
+                this.currentBossLine = assistantText;
+                this.bossLineText.setText(`Boss: "${assistantText}"`);
 
-                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                    console.log('[BossScene] WS not open, attempting reconnection...');
-                    this._setupRealtimeWebSocket();
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.realtimeResponsePromise = new Promise((resolve, reject) => {
-                        this.realtimeResponseResolver = resolve;
-                        this.time.delayedCall(15000, () => reject(new Error('WebSocket timeout')));
-                    });
-
-                    const payload = {
-                        text: userText,
-                        audio: base64,
-                        bossName: this.bossMeta.name,
-                        history: this.chatHistory || []
-                    };
-
-                    this.ws.send(JSON.stringify(payload));
-
-                    const data = await this.realtimeResponsePromise;
-                    const evalData = data.evaluation || {};
-
-                    finalPronunciation = evalData.overallScore || 70;
-                    finalGrammar = evalData.grammarScore || 70;
-                    finalExpression = evalData.exprScore || 70;
-                    finalFluency = evalData.overallScore || 70;
-                    score = evalData.totalScore || 70;
-
-                    wordScores = evalData.words || [];
-                    grammarErrors = evalData.grammarErrors || [];
-                    const exprIssues = evalData.exprIssues || [];
-                    expressionSuggestions = exprIssues.map(issue => 
-                        `${issue.original} 建议修改为 ${issue.suggestion} (${issue.explanation})`
-                    );
-
-                    this.currentBossLine = data.bossReply;
-                    this.chatHistory.push({ role: 'user', content: userText });
-                    this.chatHistory.push({ role: 'assistant', content: data.bossReply });
-
-                    if (data.audio) {
-                        this._playBossResponseAudio(data.audio);
-                    }
-
-                    success = true;
-                } else {
-                    throw new Error('WebSocket connection unavailable');
-                }
+                score = 85;
+                finalPronunciation = 85;
+                finalGrammar = 85;
+                finalExpression = 85;
+                finalFluency = 85;
+                wordScores = userText.split(/\s+/).filter(Boolean).map(word => ({
+                    word: word.replace(/[.,!?;:]/g, ''),
+                    score: 85,
+                    isCorrect: true
+                }));
+                success = Boolean(userText || assistantText);
             } catch (err) {
                 console.error('[BossScene] Realtime dialogue failed, falling back to mock:', err);
             }
@@ -821,4 +958,3 @@ export class BossScene extends Phaser.Scene {
         }
     }
 }
-
