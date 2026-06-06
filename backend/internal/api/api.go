@@ -8,13 +8,13 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine, cfg config.Config) {
-	// 注册路由
+	// 根路由
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Hello, World!",
 		})
 	})
-
+	// 健康检查端口
 	r.GET("/api/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "healthy",
@@ -25,13 +25,12 @@ func RegisterRoutes(r *gin.Engine, cfg config.Config) {
 	r.POST("/api/evaluate/pronunciation", handler.EvaluatePronunciationHandler(cfg))
 	r.POST("/api/evaluate/grammar-expression", handler.AnalyzeGrammarHandler(cfg))
 	r.POST("/api/evaluate/score", handler.CalculateScoreHandler())
+	// 总结 AI 报告 API
+	r.POST("/api/summary/generate", handler.GenerateSummaryHandler(cfg))
 
 	// 豆包语音合成API
 	r.POST("/api/audio/grammar", handler.AudioGenerateHandler(cfg))
 
-	// 总结 AI 报告 API
-	r.POST("/api/summary/generate", handler.GenerateSummaryHandler(cfg))
-
 	// 实时语音对话 WebSocket 接口
-	r.GET("/api/realtime/chat", handler.RealtimeChatHandler(cfg))
+	r.GET("/ws", handler.RealtimeChatHandler(cfg))
 }

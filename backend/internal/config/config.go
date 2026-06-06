@@ -17,6 +17,11 @@ type Config struct {
 	TencentSOERegion    string
 	DoubaoApiKey        string
 	DoubaoTTSResourceID string
+
+	DoubaoAppId string
+	DoubaoAK    string
+	DoubaoSK    string
+
 	DoubaoTTSURL        string
 	DoubaoTTSSpeaker    string
 	DoubaoTTSFormat     string
@@ -39,6 +44,9 @@ func Load() Config {
 	v.BindEnv("tencent.secret_key", "TENCENT_SECRET_KEY")
 	v.BindEnv("tencent.soe_region", "TENCENT_SOE_REGION")
 	v.BindEnv("doubao.api_key", "DOUBAO_API_KEY", "DOUBAO_TTS_API_KEY")
+	v.BindEnv("doubao.app_id", "DOUBAO_APP_ID", "DOUBAO_REALTIME_APP_ID")
+	v.BindEnv("doubao.ak", "DOUBAO_ACCESS_KEY", "DOUBAO_REALTIME_ACCESS_KEY")
+	v.BindEnv("doubao.sk", "DOUBAO_SECRET_KEY", "DOUBAO_REALTIME_SECRET_KEY")
 	v.BindEnv("doubao.tts_resource_id", "DOUBAO_TTS_RESOURCE_ID", "DOUBAO_RESOURCE_ID")
 	v.BindEnv("doubao.tts_url", "DOUBAO_TTS_URL")
 	v.BindEnv("doubao.tts_speaker", "DOUBAO_TTS_SPEAKER")
@@ -74,5 +82,8 @@ func Load() Config {
 		DoubaoTTSFormat:     v.GetString("doubao.tts_format"),
 		DoubaoTTSSampleRate: v.GetInt("doubao.tts_sample_rate"),
 		DoubaoApiKey:        v.GetString("doubao.api_key"),
+		DoubaoAppId:         v.GetString("doubao.app_id"),
+		DoubaoAK:            v.GetString("doubao.ak"),
+		DoubaoSK:            v.GetString("doubao.sk"),
 	}
 }
