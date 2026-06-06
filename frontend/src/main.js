@@ -6,10 +6,46 @@
 import Phaser from 'phaser';
 import { GameConfig } from './game/GameConfig.js';
 
-// 拦截 Phaser 3 的 Text 创建方法，全局处理文字模糊和锯齿问题
+// 拦截 Phaser 3 的 Text 创建方法，全局处理文字模糊和锯齿问题并放大 1.5 倍
 const originalTextCreator = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function (x, y, text, style) {
-    const textObj = originalTextCreator.call(this, x, y, text, style);
+    let finalStyle = style;
+    if (style) {
+        // 浅拷贝 style 以防修改原引用对象
+        finalStyle = { ...style };
+        
+        // 缩放字号（放大 1.5 倍）
+        if (finalStyle.fontSize !== undefined && finalStyle.fontSize !== null) {
+            if (typeof finalStyle.fontSize === 'number') {
+                finalStyle.fontSize = finalStyle.fontSize * 1.5;
+            } else if (typeof finalStyle.fontSize === 'string') {
+                const match = finalStyle.fontSize.match(/^([\d.]+)([a-zA-Z%]+)?$/);
+                if (match) {
+                    const value = parseFloat(match[1]);
+                    const unit = match[2] || 'px';
+                    finalStyle.fontSize = (value * 1.5) + unit;
+                }
+            }
+        } else {
+            // Phaser 默认字号为 16px，放大 1.5 倍为 24px
+            finalStyle.fontSize = '24px';
+        }
+        
+        // 缩放描边粗细（放大 1.5 倍）
+        if (finalStyle.strokeThickness !== undefined && finalStyle.strokeThickness !== null) {
+            finalStyle.strokeThickness = finalStyle.strokeThickness * 1.5;
+        }
+
+        // 缩放行间距（放大 1.5 倍）
+        if (finalStyle.lineSpacing !== undefined && finalStyle.lineSpacing !== null) {
+            finalStyle.lineSpacing = finalStyle.lineSpacing * 1.5;
+        }
+    } else {
+        // 如果没有传入 style，使用带缩放的默认字号
+        finalStyle = { fontSize: '24px' };
+    }
+
+    const textObj = originalTextCreator.call(this, x, y, text, finalStyle);
     if (textObj) {
         // 超采样机制：设置较高分辨率（至少 2 倍，或匹配物理 DPR），大幅提升文本清晰度
         const dpr = window.devicePixelRatio || 1;

@@ -51,7 +51,7 @@ canvas {
 /* 像素风按钮样式 */
 .pixel-btn {
     font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
-    font-size: 10px;
+    font-size: 15px;
     color: #fff;
     background: #2a1a3e;
     border: 2px solid #ff6b35;
@@ -83,7 +83,7 @@ canvas {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 36px;
     transition: all 0.2s;
     animation: pulse-glow 2s infinite;
 }
@@ -127,7 +127,7 @@ canvas {
 /* 对话框样式 */
 .dialogue-box {
     font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
-    font-size: 10px;
+    font-size: 15px;
     color: #e0e0e0;
     background: rgba(26, 10, 46, 0.95);
     border: 2px solid #51e5ff;
@@ -143,7 +143,7 @@ canvas {
     padding: 4px 8px;
     border-radius: 2px;
     font-family: 'Press Start 2P', "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
-    font-size: 16px;
+    font-size: 24px;
     font-weight: bold;
 }
 
