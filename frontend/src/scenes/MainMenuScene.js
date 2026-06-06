@@ -157,8 +157,9 @@ export class MainMenuScene extends Phaser.Scene {
     _startGame() {
         GameState.reset();
         GameState.isRunActive = true;
-        this.scene.start(CONSTANTS.SCENES.MAP, { act: 1, newGame: true });
+        this.scene.start(CONSTANTS.SCENES.SCENE_SELECT);
     }
+
 
     _continueGame() {
         try {

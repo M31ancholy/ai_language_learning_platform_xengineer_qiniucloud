@@ -23,6 +23,7 @@ import { HistoryScene } from '../scenes/HistoryScene.js';
 import { CollectionScene } from '../scenes/CollectionScene.js';
 import { SettingsScene } from '../scenes/SettingsScene.js';
 import { UIScene } from '../scenes/UIScene.js';
+import { SceneSelectScene } from '../scenes/SceneSelectScene.js';
 
 export const GameConfig = {
     type: Phaser.AUTO,
@@ -49,6 +50,7 @@ export const GameConfig = {
         BootScene,
         PreloadScene,
         MainMenuScene,
+        SceneSelectScene,
         MapScene,
         BattleScene,
         BossScene,
@@ -66,3 +68,4 @@ export const GameConfig = {
         UIScene,
     ],
 };
+
