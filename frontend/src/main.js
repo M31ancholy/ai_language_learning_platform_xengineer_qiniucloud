@@ -55,6 +55,14 @@ Phaser.GameObjects.GameObjectFactory.prototype.text = function (x, y, text, styl
         if (finalStyle.lineSpacing !== undefined && finalStyle.lineSpacing !== null) {
             finalStyle.lineSpacing = finalStyle.lineSpacing * 1.5;
         }
+
+        // 自动启用 useAdvancedWrap 支持中文等非空格分词文本的强制换行
+        if (finalStyle.wordWrap) {
+            finalStyle.wordWrap = {
+                ...finalStyle.wordWrap,
+                useAdvancedWrap: true
+            };
+        }
     } else {
         // 如果没有传入 style，使用带缩放的默认字号和 padding
         finalStyle = {

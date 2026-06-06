@@ -45,11 +45,11 @@ export class SummaryScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor(C.BG_DARK);
 
         // 标题
-        createPixelText(this, width / 2, 30, '📊 关卡总结', 'title', { fontSize: '18px' });
+        createPixelText(this, width / 2, 40, '📊 关卡总结', 'title', { fontSize: '18px' });
 
         // 评级大字
         const gradeInfo = CONSTANTS.GRADES[this.summaryData.grade] || CONSTANTS.GRADES.B;
-        const gradeText = createPixelText(this, width / 2, 80, this.summaryData.grade, 'grade', {
+        const gradeText = createPixelText(this, width / 2, 110, this.summaryData.grade, 'grade', {
             color: '#' + gradeInfo.color.toString(16).padStart(6, '0'),
         });
 
@@ -64,7 +64,7 @@ export class SummaryScene extends Phaser.Scene {
         });
 
         // 总分
-        createPixelText(this, width / 2, 115, `总分: ${this.summaryData.score}/100`, 'value');
+        createPixelText(this, width / 2, 175, `总分: ${this.summaryData.score}/100`, 'value');
 
         // 滚动内容区域（用容器实现简易滚动）
         this.scrollY = 0;
@@ -86,7 +86,7 @@ export class SummaryScene extends Phaser.Scene {
     // ========== 四维评分条 (固定在上方，不随内容滚动) ==========
 
     _drawScoreBars(sceneW) {
-        const startY = 145;
+        const startY = 210;
         const barW = 300;
         const barH = 16;
         const cx = sceneW / 2;
@@ -99,7 +99,7 @@ export class SummaryScene extends Phaser.Scene {
         ];
 
         dimensions.forEach((dim, i) => {
-            const y = startY + i * 32;
+            const y = startY + i * 36;
 
             // 标签
             createPixelText(this, cx - barW / 2 - 10, y, dim.name, 'small', {
@@ -219,7 +219,7 @@ export class SummaryScene extends Phaser.Scene {
         loadingText.destroy();
 
         // 动态绘制各项可滚动内容
-        let currentY = 285;
+        let currentY = 355;
 
         // 1. AI 导师点评面板
         currentY = this._drawAICoachFeedback(width, currentY, feedback, focusErrors);
@@ -247,7 +247,7 @@ export class SummaryScene extends Phaser.Scene {
         // 为 contentContainer 设置几何遮罩以限制滚动区域，防止文字滚出顶部和底部边界
         const maskShape = this.make.graphics();
         maskShape.fillStyle(0xffffff);
-        maskShape.fillRect(0, 270, width, height - 270 - 70); // 仅在 y=270 到继续按钮区域（h-70）之间显示
+        maskShape.fillRect(0, 345, width, height - 345 - 70); // 仅在 y=345 到继续按钮区域（h-70）之间显示
         const mask = maskShape.createGeometryMask();
         this.contentContainer.setMask(mask);
     }

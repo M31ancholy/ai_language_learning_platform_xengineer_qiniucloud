@@ -293,28 +293,28 @@ export class BattleScene extends Phaser.Scene {
         const p = GameState.player;
 
         // HP
-        this.hpText = this.add.text(20, barY - 8, `❤️ ${p.hp}/${p.maxHp}`, {
+        this.hpText = this.add.text(30, barY - 8, `❤️ ${p.hp}/${p.maxHp}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#ff2d2d',
         }).setDepth(11);
 
         // 护盾
-        this.shieldText = this.add.text(150, barY - 8, p.shield > 0 ? `🛡️ ${p.shield}` : '', {
+        this.shieldText = this.add.text(220, barY - 8, p.shield > 0 ? `🛡️ ${p.shield}` : '', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#4488ff',
         }).setDepth(11);
 
         // 金币
-        this.goldText = this.add.text(240, barY - 8, `💰 ${p.gold}`, {
+        this.goldText = this.add.text(360, barY - 8, `💰 ${p.gold}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#ffd700',
         }).setDepth(11);
 
         // 能量
-        this.energyText = this.add.text(360, barY - 8, `⚡ ${p.energy}/${p.maxEnergy}`, {
+        this.energyText = this.add.text(480, barY - 8, `⚡ ${p.energy}/${p.maxEnergy}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#51e5ff',
@@ -327,7 +327,7 @@ export class BattleScene extends Phaser.Scene {
 
     _createInventoryBar(width, barY) {
         this.inventoryContainer.removeAll(true);
-        const startX = 480;
+        const startX = 720;
         const items = GameState.inventory;
 
         for (let i = 0; i < CONSTANTS.PLAYER.INVENTORY_SIZE; i++) {

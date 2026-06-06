@@ -164,7 +164,7 @@ export class MapScene extends Phaser.Scene {
 
         // 护盾
         if (p.shield > 0) {
-            const shieldText = this.add.text(170, y - 6, `🛡️ ${p.shield}`, {
+            const shieldText = this.add.text(220, y - 6, `🛡️ ${p.shield}`, {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '9px',
                 color: '#4488ff',
@@ -173,15 +173,15 @@ export class MapScene extends Phaser.Scene {
         }
 
         // 金币
-        const goldText = this.add.text(240, y - 6, `💰 ${p.gold}`, {
+        const goldText = this.add.text(360, y - 6, `💰 ${p.gold}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#ffd700',
         });
         bottomBar.add(goldText);
 
-        // 背包道具槽 (X 坐标从 320 开始，占用 6 * 40 = 240)
-        const startX = 320;
+        // 背包道具槽 (X 坐标从 600 开始，占用 6 * 40 = 240)
+        const startX = 600;
         const items = GameState.inventory;
         for (let i = 0; i < CONSTANTS.PLAYER.INVENTORY_SIZE; i++) {
             const x = startX + i * 40;
@@ -206,17 +206,17 @@ export class MapScene extends Phaser.Scene {
             }
         }
 
-        // 能量 (向右移动到 580)
-        const energyText = this.add.text(580, y - 6, `⚡ ${p.energy}/${p.maxEnergy}`, {
+        // 能量 (移动到 480)
+        const energyText = this.add.text(480, y - 6, `⚡ ${p.energy}/${p.maxEnergy}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#51e5ff',
         });
         bottomBar.add(energyText);
 
-        // 平均评分 (向右移动到 680)
+        // 平均评分 (移动到 880)
         const avgScore = GameState.getAverageScore();
-        const avgText = this.add.text(680, y - 6, `📊 平均: ${avgScore}`, {
+        const avgText = this.add.text(880, y - 6, `📊 平均: ${avgScore}`, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '9px',
             color: '#cccccc',

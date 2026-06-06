@@ -255,10 +255,10 @@ export class BossScene extends Phaser.Scene {
         this.hpText = createPixelText(this, 30, barY, `❤️ HP: ${p.hp}/${p.maxHp}`, 'button', { color: '#ff2d2d' }).setOrigin(0, 0.5).setDepth(11);
 
         // 护盾
-        this.shieldText = createPixelText(this, 180, barY, `🛡️ SHIELD: ${p.shield}`, 'button', { color: '#4488ff' }).setOrigin(0, 0.5).setDepth(11);
+        this.shieldText = createPixelText(this, 220, barY, `🛡️ SHIELD: ${p.shield}`, 'button', { color: '#4488ff' }).setOrigin(0, 0.5).setDepth(11);
 
         // 金币
-        this.goldText = createPixelText(this, 340, barY, `💰 GOLD: ${p.gold}`, 'button', { color: '#ffd700' }).setOrigin(0, 0.5).setDepth(11);
+        this.goldText = createPixelText(this, 360, barY, `💰 GOLD: ${p.gold}`, 'button', { color: '#ffd700' }).setOrigin(0, 0.5).setDepth(11);
 
         // 能量
         this.energyText = createPixelText(this, 480, barY, `⚡ ENERGY: ${p.energy}/${p.maxEnergy}`, 'button', { color: '#51e5ff' }).setOrigin(0, 0.5).setDepth(11);
@@ -273,7 +273,7 @@ export class BossScene extends Phaser.Scene {
     _createInventorySlots(width, barY) {
         this.inventoryContainer.removeAll(true);
 
-        const startX = 640;
+        const startX = 720;
         const items = GameState.inventory || [];
         const p = GameState.player;
 
