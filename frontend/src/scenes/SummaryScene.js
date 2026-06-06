@@ -342,16 +342,16 @@ export class SummaryScene extends Phaser.Scene {
             const wy = startY + 20 + row * rowHeight;
 
             let icon, color;
-            if (word.score >= 90) {
+            if (word.pronAccuracy >= 90) {
                 icon = '✅'; color = '#4caf50';
-            } else if (word.score >= 60) {
+            } else if (word.pronAccuracy >= 60) {
                 icon = '⚠️'; color = '#ff9800';
             } else {
                 icon = '❌'; color = '#ff2d2d';
             }
 
             const text = createPixelText(this, wx, wy,
-                `${icon} ${word.word}: ${word.score}分`, 'small', {
+                `${icon} ${word.word}: ${word.pronAccuracy}分`, 'small', {
                     color,
                     fontSize: '7px',
                 });
