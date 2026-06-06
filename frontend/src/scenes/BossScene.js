@@ -197,16 +197,16 @@ export class BossScene extends Phaser.Scene {
 
     _createRecordingArea(width, height) {
         const cx = width / 2;
-        const recordY = 430;
+        const recordY = 500; // 整体下移以防止与 Boss 对话框重叠
 
         // 倒计时
-        this.timerText = createPixelText(this, cx, recordY - 45, `⏱️ 01:00`, 'subtitle');
+        this.timerText = createPixelText(this, cx, recordY - 65, `⏱️ 01:00`, 'subtitle');
 
         // 录音按钮
         const recordBtn = this.add.image(cx, recordY, 'btn_record').setScale(1.3);
         recordBtn.setInteractive({ useHandCursor: true });
 
-        const recordLabel = createPixelText(this, cx, recordY + 40, '点击开始回答', 'small', { color: '#cccccc' });
+        const recordLabel = createPixelText(this, cx, recordY + 50, '点击开始回答', 'small', { color: '#cccccc' });
 
         // 波形
         this.waveformBars = [];
@@ -214,7 +214,7 @@ export class BossScene extends Phaser.Scene {
         for (let i = 0; i < barCount; i++) {
             const bar = this.add.rectangle(
                 cx - (barCount * 4) / 2 + i * 4 + 2,
-                recordY + 65,
+                recordY + 75,
                 3, 4,
                 CONSTANTS.COLORS.ACCENT
             ).setAlpha(0.3);
@@ -222,7 +222,7 @@ export class BossScene extends Phaser.Scene {
         }
 
         // 识别到的文本
-        this.recognizedText = this.add.text(cx, recordY + 90, '', {
+        this.recognizedText = this.add.text(cx, recordY + 105, '', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '8px',
             color: '#4caf50',
