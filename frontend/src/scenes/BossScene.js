@@ -330,7 +330,8 @@ export class BossScene extends Phaser.Scene {
             const roundData = this.bossRoundsData[this.currentRound - 1];
             if (!roundData) return;
             this.bossLineText.setText(`Boss: "${roundData.bossLine}"`);
-            this.promptText.setText(`任务: ${roundData.prompt}\n提示: ${roundData.hints?.join(', ') || roundData.hints}`);
+            const hintsStr = Array.isArray(roundData.hints) ? roundData.hints.join(', ') : (roundData.hints || '无');
+            this.promptText.setText(`任务: ${roundData.prompt}\n提示: ${hintsStr}`);
         }
 
         // 重置录音倒计时
