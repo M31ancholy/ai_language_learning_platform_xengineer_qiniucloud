@@ -61,3 +61,6 @@ frontend/.vite/
 .cache/
 .parcel-cache/
 *.tsbuildinfo
+
+# Secrets
+backend/internal/config/secrets.yaml
