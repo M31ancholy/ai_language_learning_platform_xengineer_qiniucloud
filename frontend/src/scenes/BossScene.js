@@ -9,8 +9,11 @@ import { GameState } from '../game/GameState.js';
 import { EventBus, EVENTS } from '../utils/EventBus.js';
 import { createPixelText } from '../utils/PixelText.js';
 import { randomInt, formatTime, clamp } from '../utils/Helpers.js';
-import { BOSS_DIALOGUES } from '../data/challenges.js';
+import { getChallenge } from '../data/challenges/index.js';
+import { ApiClient } from '../services/ApiClient.js';
+import { renderColorCodedText } from '../utils/ColorTextRenderer.js';
 import { MONSTERS } from '../data/monsters.js';
+
 
 export class BossScene extends Phaser.Scene {
     constructor() {
@@ -27,19 +30,27 @@ export class BossScene extends Phaser.Scene {
     init(data) {
         this.act = data?.act || GameState.currentAct || 1;
         
-        // 获取当前章节的 Boss 配置
         const actConfig = CONSTANTS.ACTS[this.act];
-        this.bossId = this.act === 1 ? 'food_judge' : (this.act === 2 ? 'interviewer' : 'negotiator');
         
-        // 查找 Boss 元数据
-        const bossesList = MONSTERS.bosses || [];
-        this.bossMeta = bossesList.find(b => b.id === this.bossId) || {
-            name: actConfig?.boss || '大Boss',
-            icon: '👹',
-            desc: '守关首领'
-        };
+        // 动态加载当前场景及章节的 Boss 剧本与元数据
+        this.bossData = getChallenge(GameState.selectedScene, this.act, null, 'boss');
+        if (this.bossData) {
+            this.bossMeta = {
+                name: this.bossData.name,
+                icon: this.bossData.icon,
+                desc: this.bossData.scene
+            };
+            this.bossRoundsData = this.bossData.rounds || [];
+        } else {
+            // 兜底降级
+            this.bossMeta = {
+                name: actConfig?.boss || '大Boss',
+                icon: '👹',
+                desc: '守关首领'
+            };
+            this.bossRoundsData = [];
+        }
 
-        this.bossRoundsData = BOSS_DIALOGUES[this.bossId] || [];
         this.totalRounds = this.bossRoundsData.length || actConfig?.bossRounds || 4;
 
         this.currentRound = 1;
@@ -70,6 +81,11 @@ export class BossScene extends Phaser.Scene {
 
         // ========== 底部状态栏 ==========
         this._createBottomBar(width, height);
+
+        // 建立 WebSocket 连接（仅针对 Act 3 的实时语音 Boss 对话）
+        if (this.act === 3) {
+            this._setupRealtimeWebSocket();
+        }
 
         // 首次启动，显示 Boss 第一句台词
         this._showCurrentRoundLine();
@@ -298,12 +314,21 @@ export class BossScene extends Phaser.Scene {
         });
         this.hpLabel.setText(`${Math.round(pct * 100)}%`);
 
-        const roundData = this.bossRoundsData[this.currentRound - 1];
-        if (!roundData) return;
-
-        // 显示 Boss 台词与任务说明
-        this.bossLineText.setText(`Boss: "${roundData.bossLine}"`);
-        this.promptText.setText(`任务: ${roundData.prompt}\n提示: ${roundData.hints?.join(', ') || roundData.hints}`);
+        if (this.act === 3) {
+            // Act 3: 实时语音开放对话
+            if (this.currentRound === 1) {
+                this.currentBossLine = "Welcome, challenger. You have reached the summit of the Word Spire. Prove your English fluency to me!";
+                this.chatHistory = [{ role: 'assistant', content: this.currentBossLine }];
+            }
+            this.bossLineText.setText(`Boss: "${this.currentBossLine}"`);
+            this.promptText.setText(`任务: 与首领进行自由英语交流对话\n提示: 根据首领的发言进行自然作答，词数不限。`);
+        } else {
+            // Act 1 & 2: 剧本化关卡
+            const roundData = this.bossRoundsData[this.currentRound - 1];
+            if (!roundData) return;
+            this.bossLineText.setText(`Boss: "${roundData.bossLine}"`);
+            this.promptText.setText(`任务: ${roundData.prompt}\n提示: ${roundData.hints?.join(', ') || roundData.hints}`);
+        }
 
         // 重置录音倒计时
         this.timeRemaining = 60;
@@ -314,7 +339,7 @@ export class BossScene extends Phaser.Scene {
     _startRecording(btn, label) {
         this.isRecording = true;
         btn.setTexture('btn_stop');
-        label.setText('🔴 录音中... 再次点击提交');
+        label.setText('🔴 正在录音... 再次点击提交');
         label.setColor('#ff2d2d');
 
         this.timerEvent = this.time.addEvent({
@@ -340,11 +365,12 @@ export class BossScene extends Phaser.Scene {
             }
         });
 
-        // 开始 Web Speech API 模拟/真实
+        // 启动语音识别与真实录音
         this._startSpeechRecognition();
+        this._tryStartRealRecording();
     }
 
-    _stopRecording(btn, label) {
+    async _stopRecording(btn, label) {
         this.isRecording = false;
         btn.setTexture('btn_record');
         label.setText('正在智能评分...');
@@ -355,13 +381,20 @@ export class BossScene extends Phaser.Scene {
         this.waveformBars.forEach(b => { b.setSize(3, 4); b.setAlpha(0.3); });
 
         this._stopSpeechRecognition();
+        this._tryStopRealRecording();
 
         // 评分延迟效果
         this.recordBtn.disableInteractive();
-        this.time.delayedCall(1500, () => {
-            this.recordBtn.setInteractive();
-            this._evaluateRound();
-        });
+        
+        try {
+            const audioBlob = await (this.audioReadyPromise || Promise.resolve(null));
+            await this._evaluateRound(audioBlob);
+        } catch (err) {
+            console.error('[BossScene] 获取录音错误:', err);
+            await this._evaluateRound(null);
+        }
+        
+        this.recordBtn.setInteractive();
     }
 
     _startSpeechRecognition() {
@@ -391,13 +424,277 @@ export class BossScene extends Phaser.Scene {
         }
     }
 
-    _evaluateRound() {
-        const roundData = this.bossRoundsData[this.currentRound - 1];
-        if (!roundData) return;
+    // ========== 真实录音（Web API） ==========
+    async _tryStartRealRecording() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.log('浏览器不支持麦克风，使用模拟评测');
+                return;
+            }
 
-        // 基础随机分
-        const score = randomInt(70, 98);
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.mediaRecorder = new MediaRecorder(this.mediaStream);
+            this.audioChunks = [];
+
+            // 关键：设计 Promise 供录音停止时可靠获取完整数据
+            this.audioReadyPromise = new Promise((resolve) => {
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    resolve(audioBlob);
+                };
+            });
+
+            this.mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    this.audioChunks.push(e.data);
+                }
+            };
+
+            this.mediaRecorder.start();
+            console.log('Boss战录音已开始');
+        } catch (e) {
+            console.log('Boss战麦克风启动失败，使用模拟评测:', e.message);
+        }
+    }
+
+    _tryStopRealRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+            this.mediaStream?.getTracks().forEach(t => t.stop());
+        }
+    }
+
+    _blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    _setupRealtimeWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/realtime/chat`;
+        
+        console.log('[BossScene] Connecting to Realtime WebSocket:', wsUrl);
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('[BossScene] Realtime WebSocket connected');
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'reply') {
+                    if (this.realtimeResponseResolver) {
+                        this.realtimeResponseResolver(data);
+                    }
+                }
+            } catch (err) {
+                console.error('[BossScene] Failed to parse WebSocket message:', err);
+            }
+        };
+        
+        this.ws.onerror = (err) => {
+            console.error('[BossScene] WebSocket error:', err);
+        };
+        
+        this.ws.onclose = () => {
+            console.log('[BossScene] WebSocket closed');
+        };
+    }
+
+    async _playBossResponseAudio(base64Audio) {
+        try {
+            if (!this.audioCtx) {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            const binaryString = window.atob(base64Audio);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer);
+            const source = this.audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(this.audioCtx.destination);
+            source.start(0);
+            console.log('[BossScene] Playing Boss audio response');
+        } catch (err) {
+            console.error('[BossScene] Failed to play Boss audio:', err);
+        }
+    }
+
+    async _evaluateRound(audioBlob) {
+        if (this.act !== 3) {
+            const roundData = this.bossRoundsData[this.currentRound - 1];
+            if (!roundData) return;
+        }
+
+        let finalPronunciation = 0;
+        let finalGrammar = 0;
+        let finalExpression = 0;
+        let finalFluency = 0;
+        let score = 0;
+        let success = false;
+        
+        let wordScores = [];
+        let grammarErrors = [];
+        let expressionSuggestions = [];
+
+        // Act 3 实时语音开放对话分支
+        if (this.act === 3) {
+            try {
+                this.recordLabel.setText('🔄 正在传送并分析语音对话...');
+                const base64 = audioBlob ? await this._blobToBase64(audioBlob) : "";
+                const userText = this.recognizedTextContent || "Hello, I am ready to challenge you.";
+
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    console.log('[BossScene] WS not open, attempting reconnection...');
+                    this._setupRealtimeWebSocket();
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.realtimeResponsePromise = new Promise((resolve, reject) => {
+                        this.realtimeResponseResolver = resolve;
+                        this.time.delayedCall(15000, () => reject(new Error('WebSocket timeout')));
+                    });
+
+                    const payload = {
+                        text: userText,
+                        audio: base64,
+                        bossName: this.bossMeta.name,
+                        history: this.chatHistory || []
+                    };
+
+                    this.ws.send(JSON.stringify(payload));
+
+                    const data = await this.realtimeResponsePromise;
+                    const evalData = data.evaluation || {};
+
+                    finalPronunciation = evalData.overallScore || 70;
+                    finalGrammar = evalData.grammarScore || 70;
+                    finalExpression = evalData.exprScore || 70;
+                    finalFluency = evalData.overallScore || 70;
+                    score = evalData.totalScore || 70;
+
+                    wordScores = evalData.words || [];
+                    grammarErrors = evalData.grammarErrors || [];
+                    const exprIssues = evalData.exprIssues || [];
+                    expressionSuggestions = exprIssues.map(issue => 
+                        `${issue.original} 建议修改为 ${issue.suggestion} (${issue.explanation})`
+                    );
+
+                    this.currentBossLine = data.bossReply;
+                    this.chatHistory.push({ role: 'user', content: userText });
+                    this.chatHistory.push({ role: 'assistant', content: data.bossReply });
+
+                    if (data.audio) {
+                        this._playBossResponseAudio(data.audio);
+                    }
+
+                    success = true;
+                } else {
+                    throw new Error('WebSocket connection unavailable');
+                }
+            } catch (err) {
+                console.error('[BossScene] Realtime dialogue failed, falling back to mock:', err);
+            }
+        } else if (audioBlob) {
+            // Act 1 & 2 标准 API 分支
+            try {
+                this.recordLabel.setText('🔄 1/3 正在分析口语发音...');
+                const base64 = await this._blobToBase64(audioBlob);
+                
+                const userText = this.recognizedTextContent || "Hello, I agree with your proposal.";
+                const pronResult = await ApiClient.evaluatePronunciation(base64, userText, false);
+
+                this.recordLabel.setText('🔄 2/3 正在分析语法更优表达...');
+                const sceneKey = GameState.selectedScene || 'restaurant';
+                const grammarResult = await ApiClient.analyzeGrammarExpression(
+                    userText,
+                    "",
+                    sceneKey,
+                    "expert" // Boss 关统一按专家难度评测
+                );
+
+                this.recordLabel.setText('🔄 3/3 汇总评分中...');
+                const calculatedPron = pronResult.overallScore || 70;
+                const calculatedGrammar = grammarResult.grammarScore || 70;
+                const calculatedExpr = grammarResult.expressionScore || 70;
+                const calculatedFluency = calculatedPron;
+
+                const scoreResult = await ApiClient.calculateFinalScore(
+                    calculatedPron,
+                    calculatedGrammar,
+                    calculatedExpr,
+                    calculatedFluency
+                );
+
+                finalPronunciation = scoreResult.pronunciation;
+                finalGrammar = scoreResult.grammar;
+                finalExpression = scoreResult.expression;
+                finalFluency = scoreResult.fluency;
+                score = scoreResult.total;
+                
+                wordScores = pronResult.words || [];
+                grammarErrors = grammarResult.grammarErrors || [];
+                
+                const exprIssues = grammarResult.expressionIssues || [];
+                expressionSuggestions = exprIssues.map(issue => 
+                    `${issue.original} 建议修改为 ${issue.suggestion} (${issue.explanation})`
+                );
+                
+                success = true;
+
+            } catch (err) {
+                console.error('[BossScene] 真实评分请求失败，降级为模拟评分:', err);
+            }
+        }
+
+        if (!success) {
+            // 降级模拟评分
+            score = randomInt(70, 96);
+            finalPronunciation = score - randomInt(1, 5);
+            finalGrammar = score + randomInt(1, 4);
+            finalExpression = score - randomInt(2, 6);
+            finalFluency = score;
+            
+            // 模拟数据
+            wordScores = this.recognizedTextContent ? this.recognizedTextContent.split(/\s+/).map(w => ({
+                word: w.replace(/[.,!?;:]/g, ''),
+                score: randomInt(70, 98),
+                isCorrect: Math.random() > 0.15,
+            })) : [];
+            grammarErrors = finalGrammar < 85 ? [{ original: 'I wants...', corrected: 'I want...', explanation: '主谓不一致', severity: 'minor' }] : [];
+            expressionSuggestions = ['I think 建议修改为 In my opinion (更正式的表达方式)'];
+        }
+
         this.roundScores.push(score);
+
+        // 累计各项分数值 (为Victory总结做准备)
+        if (!this.accumulatedScores) {
+            this.allWordScores = [];
+            this.allGrammarErrors = [];
+            this.allExpressionSuggestions = [];
+            this.accumulatedScores = { pronunciation: 0, grammar: 0, expression: 0, fluency: 0, count: 0 };
+        }
+
+        this.accumulatedScores.pronunciation += finalPronunciation;
+        this.accumulatedScores.grammar += finalGrammar;
+        this.accumulatedScores.expression += finalExpression;
+        this.accumulatedScores.fluency += finalFluency;
+        this.accumulatedScores.count++;
+
+        this.allWordScores.push(...wordScores);
+        this.allGrammarErrors.push(...grammarErrors);
+        this.allExpressionSuggestions.push(...expressionSuggestions);
 
         // 扣血判定
         let damage = 0;
@@ -421,19 +718,26 @@ export class BossScene extends Phaser.Scene {
         this.shieldText.setText(`🛡️ SHIELD: ${p.shield}`);
 
         // 添加到对话历史
-        const roundText = `第${this.currentRound}轮: 你: "${this.recognizedTextContent || 'I understand, yes.'}" [${rating}级, ${score}分]`;
+        const userSpoken = this.recognizedTextContent || 'I understand, yes.';
+        const roundText = `第${this.currentRound}轮: 你: "${userSpoken}" [${rating}级, ${score}分]`;
         this.dialogueHistory.push(roundText);
         this.historyText.setText(this.dialogueHistory.slice(-4).join('\n\n'));
 
         // 检查死亡
         if (!GameState.isAlive()) {
+            if (this.ws) {
+                try { this.ws.close(); } catch (e) {}
+            }
             this.scene.start(CONSTANTS.SCENES.DEATH);
             return;
         }
 
+        this.recordLabel.setText('评估完毕！');
+        this.recordLabel.setColor('#4caf50');
+
         // 进入下一轮
         this.currentRound++;
-        this.time.delayedCall(1000, () => {
+        this.time.delayedCall(1500, () => {
             this._showCurrentRoundLine();
         });
     }
@@ -458,6 +762,9 @@ export class BossScene extends Phaser.Scene {
     }
 
     _onVictory() {
+        if (this.ws) {
+            try { this.ws.close(); } catch (e) {}
+        }
         GameState.completeNode(GameState.currentNodeId);
         GameState.runStats.bossesDefeated++;
 
@@ -465,17 +772,39 @@ export class BossScene extends Phaser.Scene {
         GameState.heal(999);
         GameState.player.gold += this.act * 100;
 
+
+        const count = (this.accumulatedScores && this.accumulatedScores.count) || 1;
+        const avgPron = Math.round(((this.accumulatedScores && this.accumulatedScores.pronunciation) || 90) / count);
+        const avgGrammar = Math.round(((this.accumulatedScores && this.accumulatedScores.grammar) || 90) / count);
+        const avgExpr = Math.round(((this.accumulatedScores && this.accumulatedScores.expression) || 90) / count);
+        const avgFluency = Math.round(((this.accumulatedScores && this.accumulatedScores.fluency) || 90) / count);
+        
+        const finalScore = Math.round(
+            avgPron * CONSTANTS.SCORING.PRONUNCIATION_WEIGHT +
+            avgGrammar * CONSTANTS.SCORING.GRAMMAR_WEIGHT +
+            avgExpr * CONSTANTS.SCORING.EXPRESSION_WEIGHT +
+            avgFluency * CONSTANTS.SCORING.FLUENCY_WEIGHT
+        );
+
+        let finalGrade = 'B';
+        if (finalScore >= 95) finalGrade = 'S';
+        else if (finalScore >= 85) finalGrade = 'A';
+        else if (finalScore >= 70) finalGrade = 'B';
+        else if (finalScore >= 50) finalGrade = 'C';
+        else if (finalScore >= 30) finalGrade = 'D';
+        else finalGrade = 'F';
+
         this.scene.start(CONSTANTS.SCENES.SUMMARY, {
-            grade: 'S',
-            score: Math.round(this.roundScores.reduce((a,b)=>a+b, 0) / this.roundScores.length),
-            pronunciation: 95,
-            grammar: 92,
-            expression: 90,
-            fluency: 94,
+            grade: finalGrade,
+            score: finalScore,
+            pronunciation: avgPron,
+            grammar: avgGrammar,
+            expression: avgExpr,
+            fluency: avgFluency,
             damage: 0,
-            wordScores: [],
-            grammarErrors: [],
-            expressionSuggestions: [],
+            wordScores: (this.allWordScores || []).slice(0, 12),
+            grammarErrors: (this.allGrammarErrors || []).slice(0, 5),
+            expressionSuggestions: (this.allExpressionSuggestions || []).slice(0, 5),
             isElite: false,
             act: this.act,
             isBoss: true
@@ -492,3 +821,4 @@ export class BossScene extends Phaser.Scene {
         }
     }
 }
+
