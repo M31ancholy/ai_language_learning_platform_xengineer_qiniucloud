@@ -142,7 +142,7 @@ export class SummaryScene extends Phaser.Scene {
 
     async _loadSummaryAndLayout(width, height) {
         // 在 contentContainer 中显示加载提示
-        const loadingText = createPixelText(this, width / 2, 320, '🤖 AI 导师正在生成总结报告...', 'small', {
+        const loadingText = createPixelText(this, width / 2, 400, '🤖 AI 导师正在生成总结报告...', 'small', {
             color: '#51e5ff',
             fontSize: '9px'
         });

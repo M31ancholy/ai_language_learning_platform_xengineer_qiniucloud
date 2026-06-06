@@ -92,7 +92,7 @@ export class BattleScene extends Phaser.Scene {
         const cx = width / 2;
 
         // 怪物容器
-        const monsterContainer = this.add.container(cx, 130);
+        const monsterContainer = this.add.container(cx, 115);
 
         // 选择怪物纹理
         let textureName = 'monster_rookie';
@@ -157,20 +157,20 @@ export class BattleScene extends Phaser.Scene {
     _createChallengeArea(width) {
         const cx = width / 2;
 
-        // 内容面板
-        const panel = this.add.rectangle(cx, 280, width - 80, 120, CONSTANTS.COLORS.BG_PANEL, 0.9);
+        // 内容面板（高度从 120 增大到 160，适应 1.5x 字号并保留边距）
+        const panel = this.add.rectangle(cx, 280, width - 80, 160, CONSTANTS.COLORS.BG_PANEL, 0.9);
         panel.setStrokeStyle(2, CONSTANTS.COLORS.PRIMARY);
 
         if (this.challengeType === 'reading') {
             // 朗读模式标题
-            this.add.text(60, 230, '📜 朗读内容：', {
+            this.add.text(60, 210, '📜 朗读内容：', {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '9px',
                 color: '#51e5ff',
             });
 
             // 英文内容
-            this.challengeText = this.add.text(cx, 275, this.challengeContent.text, {
+            this.challengeText = this.add.text(cx, 278, this.challengeContent.text, {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '10px',
                 color: '#ffffff',
@@ -181,7 +181,7 @@ export class BattleScene extends Phaser.Scene {
 
             // 提示
             if (this.challengeContent.tips && this.challengeContent.tips.length > 0) {
-                this.add.text(60, 320, `💡 提示: ${this.challengeContent.tips[0]}`, {
+                this.add.text(60, 342, `💡 提示: ${this.challengeContent.tips[0]}`, {
                     fontFamily: '"Press Start 2P", monospace',
                     fontSize: '7px',
                     color: '#888888',
@@ -189,19 +189,19 @@ export class BattleScene extends Phaser.Scene {
             }
         } else {
             // 场景出题模式
-            this.add.text(60, 225, `🎭 场景: ${this.challengeContent.scene || '日常对话'}`, {
+            this.add.text(60, 208, `🎭 场景: ${this.challengeContent.scene || '日常对话'}`, {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '9px',
                 color: '#51e5ff',
             });
 
-            this.add.text(60, 245, '📋 任务说明:', {
+            this.add.text(60, 226, '📋 任务说明:', {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '8px',
                 color: '#ff6b35',
             });
 
-            this.challengeText = this.add.text(cx, 285, this.challengeContent.prompt || '请用英语回答以下问题...', {
+            this.challengeText = this.add.text(cx, 282, this.challengeContent.prompt || '请用英语回答以下问题...', {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '9px',
                 color: '#ffffff',
@@ -211,7 +211,7 @@ export class BattleScene extends Phaser.Scene {
             }).setOrigin(0.5);
 
             // 评测重点
-            this.add.text(60, 325, '评测重点: 语法 · 表达 · 发音', {
+            this.add.text(60, 344, '评测重点: 语法 · 表达 · 发音', {
                 fontFamily: '"Press Start 2P", monospace',
                 fontSize: '7px',
                 color: '#888888',

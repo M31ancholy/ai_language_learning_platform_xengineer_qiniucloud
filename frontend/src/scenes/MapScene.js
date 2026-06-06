@@ -405,7 +405,7 @@ export class MapScene extends Phaser.Scene {
         const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
         overlay.setDepth(200);
 
-        const title = this.add.text(width / 2, height / 2 - 20, actName, {
+        const title = this.add.text(width / 2, height / 2 - 35, actName, {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '22px',
             color: '#ff6b35',
@@ -413,7 +413,7 @@ export class MapScene extends Phaser.Scene {
             strokeThickness: 4,
         }).setOrigin(0.5).setDepth(201).setAlpha(0);
 
-        const subtitle = this.add.text(width / 2, height / 2 + 20, '准备好你的声音...', {
+        const subtitle = this.add.text(width / 2, height / 2 + 35, '准备好你的声音...', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '10px',
             color: '#51e5ff',
