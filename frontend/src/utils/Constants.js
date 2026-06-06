@@ -36,9 +36,11 @@ export const CONSTANTS = {
         BOOT: 'BootScene',
         PRELOAD: 'PreloadScene',
         MAIN_MENU: 'MainMenuScene',
+        SCENE_SELECT: 'SceneSelectScene',
         MAP: 'MapScene',
         BATTLE: 'BattleScene',
         BOSS: 'BossScene',
+
         SHOP: 'ShopScene',
         REST: 'RestScene',
         EVENT: 'EventScene',

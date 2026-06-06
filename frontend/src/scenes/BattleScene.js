@@ -9,8 +9,13 @@ import { CONSTANTS } from '../utils/Constants.js';
 import { GameState } from '../game/GameState.js';
 import { EventBus, EVENTS } from '../utils/EventBus.js';
 import { randomInt, randomChoice, formatTime, clamp } from '../utils/Helpers.js';
+import { getChallenge } from '../data/challenges/index.js';
+import { ApiClient } from '../services/ApiClient.js';
+import { renderColorCodedText } from '../utils/ColorTextRenderer.js';
+
 
 export class BattleScene extends Phaser.Scene {
+
     constructor() {
         super({ key: CONSTANTS.SCENES.BATTLE });
         this.isRecording = false;
@@ -356,6 +361,15 @@ export class BattleScene extends Phaser.Scene {
         label.setText('🔴 正在录音... 再次点击停止');
         label.setColor('#ff2d2d');
 
+        // 清理上一次的彩色文本
+        if (this.colorCodedDom) {
+            this.colorCodedDom.destroy();
+            this.colorCodedDom = null;
+        }
+        if (this.challengeText) {
+            this.challengeText.setVisible(true);
+        }
+
         // 开始倒计时
         this.timerEvent = this.time.addEvent({
             delay: 1000,
@@ -381,10 +395,10 @@ export class BattleScene extends Phaser.Scene {
         this._tryStartRealRecording();
     }
 
-    _stopRecording(btn, label) {
+    async _stopRecording(btn, label) {
         this.isRecording = false;
         btn.setTexture('btn_record');
-        label.setText('录音完成！评测中...');
+        label.setText('录音完成！正在获取音频...');
         label.setColor('#4caf50');
 
         // 停止倒计时
@@ -398,11 +412,16 @@ export class BattleScene extends Phaser.Scene {
         // 停止真实录音
         this._tryStopRealRecording();
 
-        // 评测（模拟延迟）
         this.recordBtn.disableInteractive();
-        this.time.delayedCall(1500, () => {
-            this._evaluatePerformance();
-        });
+
+        try {
+            // 等待音频数据完全写入 Blob
+            const audioBlob = await (this.audioReadyPromise || Promise.resolve(null));
+            this._evaluatePerformance(audioBlob);
+        } catch (err) {
+            console.error('[BattleScene] 获取录音失败，降级模拟处理:', err);
+            this._evaluatePerformance(null);
+        }
     }
 
     // ========== 波形动画 ==========
@@ -434,7 +453,7 @@ export class BattleScene extends Phaser.Scene {
     async _tryStartRealRecording() {
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                console.log('浏览器不支持录音，使用模拟模式');
+                console.log('浏览器不支持麦克风，使用模拟评测');
                 return;
             }
 
@@ -442,8 +461,18 @@ export class BattleScene extends Phaser.Scene {
             this.mediaRecorder = new MediaRecorder(this.mediaStream);
             this.audioChunks = [];
 
+            // 关键：设计 Promise 供录音停止时可靠获取完整数据
+            this.audioReadyPromise = new Promise((resolve) => {
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    resolve(audioBlob);
+                };
+            });
+
             this.mediaRecorder.ondataavailable = (e) => {
-                this.audioChunks.push(e.data);
+                if (e.data && e.data.size > 0) {
+                    this.audioChunks.push(e.data);
+                }
             };
 
             this.mediaRecorder.start();
@@ -452,7 +481,7 @@ export class BattleScene extends Phaser.Scene {
             // 尝试启动语音识别
             this._tryStartSpeechRecognition();
         } catch (e) {
-            console.log('录音启动失败，使用模拟模式:', e.message);
+            console.log('麦克风启动失败，使用模拟评测:', e.message);
         }
     }
 
@@ -494,7 +523,7 @@ export class BattleScene extends Phaser.Scene {
         };
 
         this.recognition.onerror = (e) => {
-            console.log('语音识别错误:', e.error);
+            console.log('语音识别异常:', e.error);
         };
 
         try {
@@ -504,60 +533,137 @@ export class BattleScene extends Phaser.Scene {
         }
     }
 
-    // ========== 评测 ==========
-    _evaluatePerformance() {
-        // 模拟评分（基于难度生成合理的随机分数）
-        const baseRange = {
-            rookie: { min: 55, max: 95 },
-            expert: { min: 40, max: 88 },
-            hell: { min: 25, max: 80 },
-        };
+    // ========== 真实评测流程 ==========
+    async _evaluatePerformance(audioBlob) {
+        let finalPronunciation = 0;
+        let finalGrammar = 0;
+        let finalExpression = 0;
+        let finalFluency = 0;
+        let wordScores = [];
+        let grammarErrors = [];
+        let expressionSuggestions = [];
+        
+        let success = false;
 
-        const range = baseRange[this.difficulty] || baseRange.rookie;
+        if (audioBlob) {
+            try {
+                // 1. 发音评测 (腾讯云 SOE)
+                this.recordLabel.setText('🔄 1/3 正在分析你的发音...');
+                this.recordLabel.setColor('#ffd700');
+                
+                const base64 = await this._blobToBase64(audioBlob);
+                const refText = this.challengeType === 'reading' 
+                    ? this.challengeContent.text 
+                    : (this.recognizedTextContent || "Hello");
 
-        // 如果有真实识别结果，根据文本匹配度调整
-        let textMatchBonus = 0;
-        if (this.recognizedTextContent && this.challengeType === 'reading') {
-            const ref = this.challengeContent.text.toLowerCase();
-            const rec = this.recognizedTextContent.toLowerCase();
-            // 简单的词汇匹配率
-            const refWords = ref.split(/\s+/);
-            const recWords = rec.split(/\s+/);
-            const matched = refWords.filter(w => recWords.includes(w)).length;
-            textMatchBonus = Math.round((matched / refWords.length) * 20);
+                const isReading = this.challengeType === 'reading';
+                const pronResult = await ApiClient.evaluatePronunciation(base64, refText, isReading);
+
+                // 2. 语法与表达分析 (MiniMax M3)
+                this.recordLabel.setText('🔄 2/3 正在分析语法与高阶表达...');
+                
+                const sceneKey = GameState.selectedScene || 'restaurant';
+                const userText = this.recognizedTextContent || refText;
+                const grammarResult = await ApiClient.analyzeGrammarExpression(
+                    userText,
+                    this.challengeType === 'reading' ? this.challengeContent.text : '',
+                    sceneKey,
+                    this.difficulty
+                );
+
+                // 3. 计算综合分数与评级
+                this.recordLabel.setText('🔄 3/3 正在进行尖塔综合判定...');
+                
+                const calculatedPron = pronResult.overallScore || 70;
+                const calculatedGrammar = grammarResult.grammarScore || 70;
+                const calculatedExpr = grammarResult.expressionScore || 70;
+                const calculatedFluency = calculatedPron; // 以发音表示流利度
+
+                const scoreResult = await ApiClient.calculateFinalScore(
+                    calculatedPron,
+                    calculatedGrammar,
+                    calculatedExpr,
+                    calculatedFluency
+                );
+
+                finalPronunciation = scoreResult.pronunciation;
+                finalGrammar = scoreResult.grammar;
+                finalExpression = scoreResult.expression;
+                finalFluency = scoreResult.fluency;
+                
+                wordScores = pronResult.words || [];
+                grammarErrors = grammarResult.grammarErrors || [];
+                
+                // 转换表达问题为简明字符串数组，以兼容原 SummaryScene
+                const exprIssues = grammarResult.expressionIssues || [];
+                expressionSuggestions = exprIssues.map(issue => 
+                    `${issue.original} 建议修改为 ${issue.suggestion} (${issue.explanation})`
+                );
+
+                this.score = scoreResult.total;
+                this.grade = this._getGrade(this.score);
+                success = true;
+
+                // 渲染彩色纠错文本
+                this._renderColorCodedFeedback(userText, wordScores, grammarErrors, exprIssues);
+
+            } catch (err) {
+                console.error('[BattleScene] API 评测出现网络或引擎错误，自动降级为模拟评测', err);
+            }
         }
 
-        const pronunciation = clamp(randomInt(range.min, range.max) + textMatchBonus, 0, 100);
-        const grammar = clamp(randomInt(range.min + 5, range.max + 5), 0, 100);
-        const expression = clamp(randomInt(range.min - 5, range.max), 0, 100);
-        const fluency = clamp(randomInt(range.min, range.max + 3), 0, 100);
+        if (!success) {
+            // 降级模拟评分 (兜底)
+            const baseRange = {
+                rookie: { min: 55, max: 95 },
+                expert: { min: 40, max: 88 },
+                hell: { min: 25, max: 80 },
+            };
 
-        // 应用技能加成
-        const pBonus = GameState.getSkillBonus('pronunciation');
-        const gBonus = GameState.getSkillBonus('grammar');
-        const eBonus = GameState.getSkillBonus('expression');
-        const fBonus = GameState.getSkillBonus('fluency');
+            const range = baseRange[this.difficulty] || baseRange.rookie;
 
-        const finalPronunciation = clamp(pronunciation + pBonus, 0, 100);
-        const finalGrammar = clamp(grammar + gBonus, 0, 100);
-        const finalExpression = clamp(expression + eBonus, 0, 100);
-        const finalFluency = clamp(fluency + fBonus, 0, 100);
+            let textMatchBonus = 0;
+            if (this.recognizedTextContent && this.challengeType === 'reading') {
+                const ref = this.challengeContent.text.toLowerCase();
+                const rec = this.recognizedTextContent.toLowerCase();
+                const refWords = ref.split(/\s+/);
+                const recWords = rec.split(/\s+/);
+                const matched = refWords.filter(w => recWords.includes(w)).length;
+                textMatchBonus = Math.round((matched / refWords.length) * 20);
+            }
 
-        // 综合评分
-        const score = Math.round(
-            finalPronunciation * CONSTANTS.SCORING.PRONUNCIATION_WEIGHT +
-            finalGrammar * CONSTANTS.SCORING.GRAMMAR_WEIGHT +
-            finalExpression * CONSTANTS.SCORING.EXPRESSION_WEIGHT +
-            finalFluency * CONSTANTS.SCORING.FLUENCY_WEIGHT
-        );
+            const pronunciation = clamp(randomInt(range.min, range.max) + textMatchBonus, 0, 100);
+            const grammar = clamp(randomInt(range.min + 5, range.max + 5), 0, 100);
+            const expression = clamp(randomInt(range.min - 5, range.max), 0, 100);
+            const fluency = clamp(randomInt(range.min, range.max + 3), 0, 100);
 
-        // 评级
-        const grade = this._getGrade(score);
+            const pBonus = GameState.getSkillBonus('pronunciation');
+            const gBonus = GameState.getSkillBonus('grammar');
+            const eBonus = GameState.getSkillBonus('expression');
+            const fBonus = GameState.getSkillBonus('fluency');
+
+            finalPronunciation = clamp(pronunciation + pBonus, 0, 100);
+            finalGrammar = clamp(grammar + gBonus, 0, 100);
+            finalExpression = clamp(expression + eBonus, 0, 100);
+            finalFluency = clamp(fluency + fBonus, 0, 100);
+
+            this.score = Math.round(
+                finalPronunciation * CONSTANTS.SCORING.PRONUNCIATION_WEIGHT +
+                finalGrammar * CONSTANTS.SCORING.GRAMMAR_WEIGHT +
+                finalExpression * CONSTANTS.SCORING.EXPRESSION_WEIGHT +
+                finalFluency * CONSTANTS.SCORING.FLUENCY_WEIGHT
+            );
+
+            this.grade = this._getGrade(this.score);
+            wordScores = this._generateWordScores();
+            grammarErrors = this._generateGrammarErrors(finalGrammar);
+            expressionSuggestions = this._generateExpressionSuggestions();
+        }
 
         // 扣血计算
         const diffCoeff = CONSTANTS.DIFFICULTY[this.difficulty.toUpperCase()]?.coefficient || 0.3;
         const typeCoeff = this.isElite ? CONSTANTS.BATTLE_TYPE_COEFFICIENT.elite : CONSTANTS.BATTLE_TYPE_COEFFICIENT.monster;
-        const baseDamage = Math.round((100 - score) * diffCoeff * typeCoeff);
+        const baseDamage = Math.round((100 - this.score) * diffCoeff * typeCoeff);
         const damage = Math.max(0, baseDamage);
 
         // 应用伤害
@@ -566,15 +672,10 @@ export class BattleScene extends Phaser.Scene {
         }
 
         // 记录战斗结果
-        GameState.recordBattleResult(grade.label, score);
+        GameState.recordBattleResult(this.grade.label, this.score);
 
         // 怪物死亡动画
         this._playMonsterDeathAnimation();
-
-        // 生成词级评分（模拟）
-        const wordScores = this._generateWordScores();
-        const grammarErrors = this._generateGrammarErrors(finalGrammar);
-        const expressionSuggestions = this._generateExpressionSuggestions();
 
         // 完成节点
         GameState.completeNode(this.nodeData.id);
@@ -582,14 +683,26 @@ export class BattleScene extends Phaser.Scene {
         if (this.isElite) GameState.runStats.elitesDefeated++;
         else GameState.runStats.monstersDefeated++;
 
+        this.recordLabel.setText('评估完毕！');
+        this.recordLabel.setColor('#4caf50');
+
+        // 恢复录音按钮交互以备下一关
+        this.recordBtn.setInteractive();
+
         // 延迟跳转到总结
-        this.time.delayedCall(1500, () => {
+        this.time.delayedCall(2000, () => {
+            // 在跳转前销毁 DOM 以防残留
+            if (this.colorCodedDom) {
+                this.colorCodedDom.destroy();
+                this.colorCodedDom = null;
+            }
+
             if (!GameState.isAlive()) {
                 this.scene.start(CONSTANTS.SCENES.DEATH);
             } else {
                 this.scene.start(CONSTANTS.SCENES.SUMMARY, {
-                    grade: grade.label,
-                    score,
+                    grade: this.grade.label,
+                    score: this.score,
                     pronunciation: finalPronunciation,
                     grammar: finalGrammar,
                     expression: finalExpression,
@@ -605,6 +718,30 @@ export class BattleScene extends Phaser.Scene {
             }
         });
     }
+
+    _blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    _renderColorCodedFeedback(text, wordScores, grammarErrors, expressionIssues) {
+        if (this.challengeText) {
+            this.challengeText.setVisible(false);
+        }
+
+        const cx = this.scale.width / 2;
+        const htmlContent = renderColorCodedText(text, wordScores, grammarErrors, expressionIssues);
+
+        // 替换为 DOM 元素进行富文本彩色高亮排版
+        this.colorCodedDom = this.add.dom(cx, 280).createFromHTML(
+            `<div style="font-family: 'Press Start 2P', 'PingFang SC', sans-serif; font-size: 13px; color: white; line-height: 1.8; text-align: center; width: ${this.scale.width - 120}px; word-wrap: break-word;">${htmlContent}</div>`
+        );
+    }
+
 
     _getGrade(score) {
         const grades = CONSTANTS.GRADES;
@@ -708,51 +845,22 @@ export class BattleScene extends Phaser.Scene {
         });
     }
 
-    // ========== 获取挑战内容 ==========
     _getChallenge() {
-        // 默认内容（如果数据文件还没加载）
-        const defaultReadings = {
-            rookie: [
-                { text: 'Hello, my name is Tom. I would like a cup of coffee, please. Thank you very much.', topic: '自我介绍/点餐', timeLimit: 60, passThreshold: 60, tips: ['注意"would"的发音', '"please"语调上扬'] },
-                { text: 'Excuse me, could you tell me where the nearest subway station is? I need to get to downtown.', topic: '问路', timeLimit: 60, tips: ['注意"excuse"的重音'] },
-                { text: 'I have a reservation under the name Smith for two people. We would prefer a table by the window.', topic: '酒店/餐厅预订', timeLimit: 60, tips: ['注意"reservation"的发音'] },
-            ],
-            expert: [
-                { text: 'I would like to schedule a meeting with the marketing department to discuss the quarterly performance review and budget allocation.', topic: '职场沟通', timeLimit: 45, passThreshold: 75, tips: ['注意"quarterly"的发音'] },
-                { text: 'Could you please provide me with a detailed breakdown of the shipping costs and estimated delivery timeline for this order?', topic: '商务询价', timeLimit: 45, tips: ['注意连贯性'] },
-            ],
-            hell: [
-                { text: 'The juxtaposition of contemporary architectural methodologies with the quintessential paradigms of neoclassical design evokes a profound epistemological discourse.', topic: '学术表达', timeLimit: 30, passThreshold: 85, tips: ['注意每个长词的重音位置'] },
-                { text: 'In light of the unprecedented challenges posed by the current economic volatility, our organization has implemented a comprehensive restructuring initiative.', topic: '商务报告', timeLimit: 30, tips: ['保持语速均匀'] },
-            ],
-        };
-
-        const defaultScenes = {
-            rookie: [
-                { scene: '咖啡厅', prompt: '服务员问你想喝什么，请用英语回答。\n提示：可以点一杯咖啡或茶。', context: 'At a coffee shop', timeLimit: 60, hints: ['I would like...', 'Can I have...'] },
-                { scene: '超市', prompt: '你在超市找不到牛奶，请用英语问店员牛奶在哪里。', context: 'At a supermarket', timeLimit: 60, hints: ['Excuse me, where can I find...'] },
-            ],
-            expert: [
-                { scene: '酒店前台', prompt: '你预订的房间被超卖了。请和前台沟通，要求升级房型或获得补偿。', context: 'Hotel front desk complaint', timeLimit: 45, hints: ['I had a reservation...', 'Is there any possibility...'] },
-                { scene: '公司会议', prompt: '请用英语简要介绍你上个月的工作进展和下个月的计划。', context: 'Monthly meeting update', timeLimit: 45, hints: ['Last month I worked on...', 'For next month, I plan to...'] },
-            ],
-            hell: [
-                { scene: '产品发布会', prompt: '请用英语即兴介绍一款新手机的三个核心功能，并说服观众为什么要购买。', context: 'Product launch presentation', timeLimit: 30, hints: [] },
-                { scene: '辩论场', prompt: '有人说AI将取代所有工作。请用英语反驳这个观点，至少给出两个理由。', context: 'Debate', timeLimit: 30, hints: [] },
-            ],
-        };
-
-        try {
-            // 尝试从数据模块获取（如果已加载）
-            const pool = this.challengeType === 'reading' ? defaultReadings : defaultScenes;
-            const diffPool = pool[this.difficulty] || pool.rookie;
-            return randomChoice(diffPool);
-        } catch (e) {
-            return this.challengeType === 'reading'
-                ? defaultReadings.rookie[0]
-                : defaultScenes.rookie[0];
+        const challenge = getChallenge(GameState.selectedScene, this.act, this.difficulty, this.challengeType);
+        if (challenge) {
+            return challenge;
         }
+
+        // 兜底防崩配置
+        return {
+            id: 'fallback_reading',
+            text: 'Hello, my name is Tom. I would like a cup of coffee, please.',
+            topic: '自我介绍/点餐',
+            timeLimit: 60,
+            tips: ['注意"would"的发音']
+        };
     }
+
 
     _getMonsterName() {
         const names = {

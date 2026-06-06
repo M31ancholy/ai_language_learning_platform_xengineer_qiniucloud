@@ -138,6 +138,7 @@ export class SaveSystem {
                 maxHp: gs.player?.maxHp || 0,
                 gold: gs.player?.gold || 0,
                 floor: gs.runStats?.floorsClimbed || 0,
+                scene: gs.selectedScene || 'unknown',
             };
         } catch {
             return null;

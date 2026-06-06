@@ -82,7 +82,11 @@ class GameStateClass {
 
         // 课后总结数据
         this.lastSummary = null;
+
+        // 选定的场景（'interview' | 'restaurant' | 'meeting' | 'random'）
+        this.selectedScene = null;
     }
+
 
     // ========== 生命值操作 ==========
 
@@ -252,6 +256,7 @@ class GameStateClass {
             this.completedNodes.push(nodeId);
         }
         this.runStats.floorsClimbed++;
+        this.save(); // 立即自动保存，防止刷新丢失进度
         EventBus.emit(EVENTS.MAP_NODE_COMPLETED, nodeId);
     }
 
@@ -304,10 +309,20 @@ class GameStateClass {
 
     // ========== 存档 ==========
 
+    save() {
+        try {
+            localStorage.setItem('wordspire_save', JSON.stringify(this.toJSON()));
+            console.log('[GameState] 自动存档成功');
+        } catch (e) {
+            console.warn('[GameState] 自动存档失败:', e);
+        }
+    }
+
     toJSON() {
         return {
             runId: this.runId,
             currentAct: this.currentAct,
+            selectedScene: this.selectedScene,
             player: deepClone(this.player),
             inventory: deepClone(this.inventory),
             relics: deepClone(this.relics),
@@ -321,6 +336,7 @@ class GameStateClass {
             runStats: deepClone(this.runStats),
         };
     }
+
 
     fromJSON(data) {
         const cloned = deepClone(data);

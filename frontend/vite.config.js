@@ -11,6 +11,14 @@ export default defineConfig({
     },
     server: {
         port: 8080,
-        open: true
+        open: true,
+        proxy: {
+            '/api': {
+                target: 'http://localhost:8081',
+                changeOrigin: true,
+                ws: true // Enable WebSocket proxy support
+            }
+        }
     }
 });
+
