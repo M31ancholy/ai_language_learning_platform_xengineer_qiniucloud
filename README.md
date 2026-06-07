@@ -1,5 +1,7 @@
 # 🎮 语塔攀登 (WordSpire) —— 英语口语 Roguelike 练习游戏
 
+> 🎬 **演示视频链接**：[Bilibili 演示视频](https://www.bilibili.com/video/BV1zJEh6vETt/?vd_source=eeb984802be0b0b8f106867d895ac65e)
+
 **语塔攀登 (WordSpire)** 是一款将 Roguelike 爬塔玩法与英语口语练习深度融合的创新 HTML5 网页游戏。玩家通过大地图规划路线，在应对小怪、精英及 Boss 战的过程中进行朗读与对话。游戏接入了专业的口语评测引擎与 LLM 分析大模型，将枯燥的口语练习转变为刺激的主动冒险。
 
 ---
